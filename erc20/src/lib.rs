@@ -8,9 +8,16 @@ use eth_riscv_runtime::types::Mapping;
 
 use alloy_core::primitives::{Address, address, U256};
 
+extern crate alloc;
+use alloc::string::String;
+
 #[derive(Default)]
 pub struct ERC20 {
     balance: Mapping<Address, u64>,
+    allowances: Mapping<Address, Mapping<Address, u64>>,
+    total_supply: u64,
+    name: String,
+    symbol: String,
 }
 
 #[contract]
@@ -40,5 +47,15 @@ impl ERC20 {
 
         let to_balance = self.balance.read(to);
         self.balance.write(to, to_balance + value);
+    }
+
+    // Returns the name of the token.
+    pub fn name(&self) -> String {
+        self.name.clone()
+    }
+
+    // Returns the symbol of the token, usually a shorter version of the name.
+    pub fn symbol(&self) -> String {
+        self.symbol.clone()
     }
 }
