@@ -87,6 +87,19 @@ pub fn msg_sender() -> Address {
     Address::from_slice(&bytes)
 }
 
+pub fn log(data_ptr: u64, data_size: u64, topics_ptr: u64, topics_size: u64) {
+    unsafe {
+        asm!(
+            "ecall",
+            in("a0") data_ptr,
+            in("a1") data_size,
+            in("a2") topics_ptr,
+            in("a3") topics_size,
+            in("t0") u32::from(Syscall::Log)
+        );
+    }
+}
+
 #[allow(non_snake_case)]
 #[no_mangle]
 fn DefaultHandler() {

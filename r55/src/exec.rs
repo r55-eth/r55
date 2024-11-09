@@ -5,7 +5,7 @@ use revm::{
         CallInputs, CallScheme, CallValue, Host, InstructionResult, Interpreter, InterpreterAction,
         InterpreterResult, SharedMemory,
     },
-    primitives::{address, Address, Bytes, ExecutionResult, Output, TransactTo, U256},
+    primitives::{address, Address, Bytes, ExecutionResult, Output, TransactTo, U256, B256, Log},
     Database, Evm, Frame, FrameOrResult, InMemoryDB,
 };
 use rvemu::{emulator::Emulator, exception::Exception};
@@ -38,7 +38,12 @@ pub fn deploy_contract(db: &mut InMemoryDB, bytecode: Bytes) -> Address {
     }
 }
 
-pub fn run_tx(db: &mut InMemoryDB, addr: &Address, calldata: Vec<u8>) {
+pub struct TxResult {
+    pub output: Vec<u8>,
+    pub logs: Vec<Log>  
+}
+
+pub fn run_tx(db: &mut InMemoryDB, addr: &Address, calldata: Vec<u8>) -> TxResult {
     let mut evm = Evm::builder()
         .with_db(db)
         .modify_tx_env(|tx| {
@@ -55,10 +60,17 @@ pub fn run_tx(db: &mut InMemoryDB, addr: &Address, calldata: Vec<u8>) {
     match result {
         ExecutionResult::Success {
             output: Output::Call(value),
+            logs,
             ..
-        } => println!("Tx result: {:?}", value),
+        } => {
+            println!("Tx result: {:?}", value);
+            TxResult {
+                output:value.into(),
+                logs
+            }
+        }, 
         result => panic!("Unexpected result: {:?}", result),
-    };
+    }
 }
 
 #[derive(Debug)]
@@ -255,6 +267,42 @@ fn execute_riscv(
                         padded_bytes[..4].copy_from_slice(&caller_bytes[16..20]);
                         let third_u64 = u64::from_be_bytes(padded_bytes);
                         emu.cpu.xregs.write(12, third_u64);
+                    }
+
+                    6 => {
+                        // Syscall::Log
+                        let data_ptr: u64 = emu.cpu.xregs.read(10);
+                        let data_size: u64 = emu.cpu.xregs.read(11);
+                        let topics_ptr: u64 = emu.cpu.xregs.read(12);
+                        let topics_size: u64 = emu.cpu.xregs.read(13);
+
+                        // Read data
+                        let data = if data_size > 0 {
+                            emu.cpu.bus
+                                .get_dram_slice(data_ptr..(data_ptr + data_size))
+                                .unwrap()
+                                .to_vec()
+                        } else {
+                            vec![]
+                        };
+
+                        // Read topics
+                        let mut topics = Vec::new();
+                        if topics_size > 0 {
+                            for i in 0..topics_size {
+                                let topic_ptr = topics_ptr + (i * 32);
+                                let topic_data = emu.cpu.bus
+                                    .get_dram_slice(topic_ptr..(topic_ptr + 32))
+                                    .unwrap();
+                                topics.push(B256::from_slice(topic_data));
+                            }
+                        }
+
+                        host.log(Log::new_unchecked(
+                            interpreter.contract.target_address,
+                            topics,
+                            data.into(),
+                        ));
                     }
                     _ => {
                         println!("Unhandled syscall: {:?}", t0);
