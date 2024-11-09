@@ -88,8 +88,7 @@ pub fn keccak256(offset: u64, size: u64) -> B256 {
             lateout("a1") second,
             lateout("a2") third,
             lateout("a3") fourth,
-            in("t0") u32::from(Syscall::Keccak256),
-            options(nostack, preserves_flags)
+            in("t0") u32::from(Syscall::Keccak256)
         );
     }
 
