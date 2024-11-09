@@ -59,5 +59,5 @@ syscalls!(
     (3, Call, "call"),
     (4, Revert, "revert"),
     (5, Caller, "caller"),
-    (6, Keccak256, "keccak256"),
+    (0x20, Keccak256, "keccak256"),
 );
