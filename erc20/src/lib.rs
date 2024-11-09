@@ -6,7 +6,7 @@ use core::default::Default;
 use contract_derive::contract;
 use eth_riscv_runtime::types::Mapping;
 
-use alloy_core::primitives::{Address, address};
+use alloy_core::primitives::{Address, address, U256};
 
 #[derive(Default)]
 pub struct ERC20 {
@@ -34,6 +34,9 @@ impl ERC20 {
     pub fn mint(&self, to: Address, value: u64) {
         let owner = msg_sender();
         if owner != address!("0000000000000000000000000000000000000007") {
+            revert();
+        }
+        if msg_value() != U256::from(0) {
             revert();
         }
 

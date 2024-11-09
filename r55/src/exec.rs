@@ -11,6 +11,7 @@ use revm::{
 };
 use rvemu::{emulator::Emulator, exception::Exception};
 use std::{cell::RefCell, ops::Range, rc::Rc, sync::Arc};
+use eth_riscv_syscalls::Syscall;
 
 pub fn deploy_contract(db: &mut InMemoryDB, bytecode: Bytes) -> Address {
     let mut evm = Evm::builder()
@@ -153,9 +154,8 @@ fn execute_riscv(
         match run_result {
             Err(Exception::EnvironmentCallFromMMode) => {
                 let t0: u64 = emu.cpu.xregs.read(5);
-                match t0 {
-                    0 => {
-                        // Syscall::Return
+                match Syscall::try_from(t0) {
+                    Ok(Syscall::Return) => {
                         let ret_offset: u64 = emu.cpu.xregs.read(10);
                         let ret_size: u64 = emu.cpu.xregs.read(11);
                         let data_bytes = if ret_size != 0 {
@@ -174,8 +174,7 @@ fn execute_riscv(
                             },
                         };
                     }
-                    1 => {
-                        // Syscall:SLoad
+                    Ok(Syscall::SLoad) => {
                         let key: u64 = emu.cpu.xregs.read(10);
                         match host.sload(interpreter.contract.target_address, U256::from(key)) {
                             Some((value, _is_cold)) => {
@@ -185,9 +184,8 @@ fn execute_riscv(
                                 return return_revert(interpreter);
                             }
                         }
-                    }
-                    2 => {
-                        // Syscall::SStore
+                        }
+                    Ok(Syscall::SStore) => {
                         let key: u64 = emu.cpu.xregs.read(10);
                         let value: u64 = emu.cpu.xregs.read(11);
                         host.sstore(
@@ -196,8 +194,7 @@ fn execute_riscv(
                             U256::from(value),
                         );
                     }
-                    3 => {
-                        // Syscall::Call
+                    Ok(Syscall::Call) => {
                         let a0: u64 = emu.cpu.xregs.read(10);
                         let address =
                             Address::from_slice(emu.cpu.bus.get_dram_slice(a0..(a0 + 20)).unwrap());
@@ -233,8 +230,7 @@ fn execute_riscv(
                             }),
                         };
                     }
-                    4 => {
-                        // Syscall::Revert
+                    Ok(Syscall::Revert) => {
                         return InterpreterAction::Return {
                             result: InterpreterResult {
                                 result: InstructionResult::Revert,
@@ -243,8 +239,7 @@ fn execute_riscv(
                             },
                         };
                     }
-                    5 => {
-                        // Syscall::Caller
+                    Ok(Syscall::Caller) => {
                         let caller = interpreter.contract.caller;
                         // Break address into 3 u64s and write to registers
                         let caller_bytes = caller.as_slice();
@@ -257,8 +252,7 @@ fn execute_riscv(
                         let third_u64 = u64::from_be_bytes(padded_bytes);
                         emu.cpu.xregs.write(12, third_u64);
                     }
-                    0x20 => {
-                        // Syscall::Keccak256
+                    Ok(Syscall::Keccak256) => {
                         let offset: u64 = emu.cpu.xregs.read(10);
                         let size: u64 = emu.cpu.xregs.read(11);
 
@@ -280,6 +274,14 @@ fn execute_riscv(
                         emu.cpu.xregs.write(11, u64::from_le_bytes(hash[8..16].try_into().unwrap()));
                         emu.cpu.xregs.write(12, u64::from_le_bytes(hash[16..24].try_into().unwrap()));
                         emu.cpu.xregs.write(13, u64::from_le_bytes(hash[24..32].try_into().unwrap()));
+                    }
+                    Ok(Syscall::CALLVALUE) => {
+                        let value = interpreter.contract.call_value;
+                        let limbs = value.into_limbs();
+                        emu.cpu.xregs.write(10, limbs[0]);
+                        emu.cpu.xregs.write(11, limbs[1]);
+                        emu.cpu.xregs.write(12, limbs[2]);
+                        emu.cpu.xregs.write(13, limbs[3]);
                     }
                     _ => {
                         println!("Unhandled syscall: {:?}", t0);

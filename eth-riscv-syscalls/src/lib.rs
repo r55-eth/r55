@@ -3,7 +3,7 @@
 macro_rules! syscalls {
     ($(($num:expr, $identifier:ident, $name:expr)),* $(,)?) => {
         #[derive(Copy, Clone, Ord, PartialOrd, Eq, PartialEq, Hash)]
-        #[repr(u32)]
+        #[repr(u64)]
         pub enum Syscall {
             $($identifier = $num),*
         }
@@ -26,15 +26,15 @@ macro_rules! syscalls {
             }
         }
 
-        impl From<Syscall> for u32 {
+        impl From<Syscall> for u64 {
             fn from(syscall: Syscall) -> Self {
                 syscall as Self
             }
         }
 
-        impl core::convert::TryFrom<u32> for Syscall {
+        impl core::convert::TryFrom<u64> for Syscall {
             type Error = ();
-            fn try_from(value: u32) -> Result<Self, Self::Error> {
+            fn try_from(value: u64) -> Result<Self, Self::Error> {
                 match value {
                     $($num => Ok(Syscall::$identifier)),*,
                     _ => Err(()),
@@ -60,4 +60,5 @@ syscalls!(
     (4, Revert, "revert"),
     (5, Caller, "caller"),
     (0x20, Keccak256, "keccak256"),
+    (34, CALLVALUE, "callvalue") 
 );
