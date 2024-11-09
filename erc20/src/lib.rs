@@ -2,12 +2,15 @@
 #![no_main]
 
 use core::default::Default;
-
 use contract_derive::contract;
-use eth_riscv_runtime::{types::Mapping, log};
-
+use eth_riscv_runtime::{types::Mapping};
 use alloy_core::primitives::{Address, address};
+use alloy_sol_types::sol;
 
+sol! {
+    #[derive(Debug)]
+    event Transfer(address indexed from, address indexed to, uint64 value);
+}
 #[derive(Default)]
 pub struct ERC20 {
     balance: Mapping<Address, u64>,
@@ -30,17 +33,12 @@ impl ERC20 {
         self.balance.write(from, from_balance - value);
         self.balance.write(to, to_balance + value);
 
-        let mut log_data = [0u8; 48];  // 20 + 20 + 8 bytes
-        log_data[..20].copy_from_slice(from.as_slice());
-        log_data[20..40].copy_from_slice(to.as_slice());
-        log_data[40..48].copy_from_slice(&value.to_ne_bytes());
-    
-        log(
-            log_data.as_ptr() as u64,
-            log_data.len() as u64,
-            0,
-            0
-        );
+        emit(Transfer {
+            from,
+            to,
+            value,
+        });
+        
         true
     }
 
