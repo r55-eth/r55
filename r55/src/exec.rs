@@ -257,7 +257,7 @@ fn execute_riscv(
                         let third_u64 = u64::from_be_bytes(padded_bytes);
                         emu.cpu.xregs.write(12, third_u64);
                     }
-                    6 => {
+                    0x20 => {
                         // Syscall::Keccak256
                         let offset: u64 = emu.cpu.xregs.read(10);
                         let size: u64 = emu.cpu.xregs.read(11);
