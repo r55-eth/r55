@@ -2,11 +2,10 @@
 
 resolver = "2"
 
-members = [ "eth-riscv-interpreter",
-    "eth-riscv-syscalls", "r55",
-]
+members = ["eth-riscv-interpreter", "eth-riscv-syscalls", "r55"]
+default-members = ["eth-riscv-interpreter", "eth-riscv-syscalls", "r55"]
 
-exclude = [ "contract-derive", "erc20", "eth-riscv-runtime" ]
+exclude = ["contract-derive", "erc20", "eth-riscv-runtime"]
 
 [workspace.package]
 version = "0.1.0"
@@ -15,3 +14,5 @@ license = "Apache 2.0"
 repository = "https://github.com/leonardoalt/r5"
 
 [workspace.dependencies]
+eth-riscv-interpreter = { path = "eth-riscv-interpreter" }
+eth-riscv-syscalls = { path = "eth-riscv-syscalls" }
