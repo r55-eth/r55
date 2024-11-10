@@ -45,19 +45,19 @@ macro_rules! syscalls {
 }
 
 // Generate `Syscall` enum with supported syscalls and their numbers.
-// t0: 0, opcode for return, a0: memory address of data, a1: length of data, in bytes, doesn't return
-// t0: 1, opcode for sload, a0: storage key, returns 64-bit value in a0
-// t0: 2, opcode for sstore, a0: storage key, a1: storage value, returns nothing
-// t0: 3, opcode for call, args: TODO
-// t0: 4, opcode for revert, doesn't return
-// t0: 5, opcode for caller, returns an address
 // t0: 0x20, opcode for keccak256, a0: offset, a1: size, returns keccak256 hash
+// t0: 0x33, opcode for caller, returns an address
+// t0: 0x54, opcode for sload, a0: storage key, returns 64-bit value in a0
+// t0: 0x55, opcode for sstore, a0: storage key, a1: storage value, returns nothing
+// t0: 0xf1, opcode for call, args: TODO
+// t0: 0xf3, opcode for return, a0: memory address of data, a1: length of data in bytes, doesn't return
+// t0: 0xfd, opcode for revert, doesn't return
 syscalls!(
-    (0, Return, "return"),
-    (1, SLoad, "sload"),
-    (2, SStore, "sstore"),
-    (3, Call, "call"),
-    (4, Revert, "revert"),
-    (5, Caller, "caller"),
     (0x20, Keccak256, "keccak256"),
+    (0x33, Caller, "caller"),
+    (0x54, SLoad, "sload"),
+    (0x55, SStore, "sstore"),
+    (0xf1, Call, "call"),
+    (0xf3, Return, "return"),
+    (0xfd, Revert, "revert")
 );
