@@ -283,6 +283,17 @@ fn execute_riscv(
                         emu.cpu.xregs.write(12, limbs[2]);
                         emu.cpu.xregs.write(13, limbs[3]);
                     }
+                    Ok(Syscall::CALLDATALOAD) => {
+                        let offset: u64 = emu.cpu.xregs.read(10);
+                        // We only need 32 bytes of call data start from offset
+                        let call_data = interpreter.contract.input.get(offset as usize..(offset + 32) as usize).unwrap();
+                        println!("call_data: {:?}", call_data);
+                        // TODO: handle case where call_data is less than 32 bytes
+                        emu.cpu.xregs.write(10, u64::from_le_bytes(call_data[0..8].try_into().unwrap()));
+                        emu.cpu.xregs.write(11, u64::from_le_bytes(call_data[8..16].try_into().unwrap()));
+                        emu.cpu.xregs.write(12, u64::from_le_bytes(call_data[16..24].try_into().unwrap()));
+                        emu.cpu.xregs.write(13, u64::from_le_bytes(call_data[24..32].try_into().unwrap()));
+                    }
                     _ => {
                         println!("Unhandled syscall: {:?}", t0);
                         return return_revert(interpreter);

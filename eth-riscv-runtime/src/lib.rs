@@ -88,7 +88,7 @@ pub fn keccak256(offset: u64, size: u64) -> B256 {
             lateout("a1") second,
             lateout("a2") third,
             lateout("a3") fourth,
-            in("t0") u32::from(Syscall::Keccak256)
+            in("t0") u64::from(Syscall::Keccak256)
         );
     }
 
@@ -125,6 +125,17 @@ pub fn msg_value() -> U256 {
         asm!("ecall", lateout("a0") first, lateout("a1") second, lateout("a2") third, lateout("a3") fourth, in("t0") u64::from(Syscall::CALLVALUE));
     }
     U256::from_limbs([first, second, third, fourth])
+}
+
+pub fn msg_sig() -> [u8; 4] {
+    let first: u64;
+    let offset: u64 = 0;
+    unsafe {
+        asm!("ecall", lateout("a0") first, in("a0") offset, in("t0") u64::from(Syscall::CALLDATALOAD));
+    }
+    let mut bytes = [0u8; 4];
+    bytes.copy_from_slice(&first.to_le_bytes()[0..4]);
+    bytes
 }
 
 #[allow(non_snake_case)]

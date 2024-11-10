@@ -81,7 +81,7 @@ pub fn contract(_attr: TokenStream, item: TokenStream) -> TokenStream {
     // Generate the call method implementation
     let call_method = quote! {
         use alloy_sol_types::SolValue;
-        use eth_riscv_runtime::{revert, msg_sender, msg_value, return_riscv, slice_from_raw_parts, Contract};
+        use eth_riscv_runtime::{revert, msg_sender, msg_value, msg_sig, return_riscv, slice_from_raw_parts, Contract};
 
         impl Contract for #struct_name {
             fn call(&self) {

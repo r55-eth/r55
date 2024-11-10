@@ -60,5 +60,6 @@ syscalls!(
     (4, Revert, "revert"),
     (5, Caller, "caller"),
     (0x20, Keccak256, "keccak256"),
-    (34, CALLVALUE, "callvalue") 
+    (34, CALLVALUE, "callvalue"),
+    (35, CALLDATALOAD, "calldataload")
 );

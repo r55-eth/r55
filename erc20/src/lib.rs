@@ -39,6 +39,9 @@ impl ERC20 {
         if msg_value() != U256::from(0) {
             revert();
         }
+        if msg_sig() != [2, 0, 0, 0] {
+            revert();
+        }
 
         let to_balance = self.balance.read(to);
         self.balance.write(to, to_balance + value);
