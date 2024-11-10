@@ -71,15 +71,15 @@ struct RVEmu {
 
 fn riscv_context(frame: &Frame) -> Option<RVEmu> {
     let interpreter = frame.interpreter();
-    if matches!(interpreter.bytecode.get(0), Some(0xFF)) {
-        let emu = setup_from_elf(&interpreter.bytecode[1..], &interpreter.contract.input);
-        Some(RVEmu {
-            emu,
-            returned_data_destiny: None,
-        })
-    } else {
-        None
-    }
+
+    let Some((0xFF, bytecode)) = interpreter.bytecode.split_first() else {
+        return None;
+    };
+    let emu = setup_from_elf(bytecode, &interpreter.contract.input);
+    Some(RVEmu {
+        emu,
+        returned_data_destiny: None,
+    })
 }
 
 pub fn handle_register<EXT, DB: Database>(handler: &mut EvmHandler<'_, EXT, DB>) {
@@ -133,9 +133,11 @@ fn execute_riscv(
     let emu = &mut rvemu.emu;
     let returned_data_destiny = &mut rvemu.returned_data_destiny;
     if let Some(destiny) = std::mem::take(returned_data_destiny) {
-        let data = emu.cpu.bus
-        	.get_dram_slice(destiny)
-        	.unwrap_or_else(|e| panic!("Unable to get destiny dram slice ({e:?})"));
+        let data = emu
+            .cpu
+            .bus
+            .get_dram_slice(destiny)
+            .unwrap_or_else(|e| panic!("Unable to get destiny dram slice ({e:?})"));
         data.copy_from_slice(shared_memory.slice(0, data.len()))
     }
 
@@ -158,22 +160,16 @@ fn execute_riscv(
                 let t0: u64 = emu.cpu.xregs.read(5);
 
                 let Ok(syscall) = Syscall::try_from(t0 as u8) else {
-	                println!("Unhandled syscall: {:?}", t0);
-	                return return_revert(interpreter);
+                    println!("Unhandled syscall: {:?}", t0);
+                    return return_revert(interpreter);
                 };
 
                 match syscall {
                     Syscall::Return => {
                         let ret_offset: u64 = emu.cpu.xregs.read(10);
                         let ret_size: u64 = emu.cpu.xregs.read(11);
-                        let data_bytes = if ret_size != 0 {
-                            emu.cpu
-                                .bus
-                                .get_dram_slice(ret_offset..(ret_offset + ret_size))
-                                .unwrap()
-                        } else {
-                            &mut []
-                        };
+                        let data_bytes = dram_slice(emu, ret_offset, ret_size);
+
                         return InterpreterAction::Return {
                             result: InterpreterResult {
                                 result: InstructionResult::Return,
@@ -247,7 +243,7 @@ fn execute_riscv(
                             },
                         };
                     }
-                     Syscall::Caller => {
+                    Syscall::Caller => {
                         let caller = interpreter.contract.caller;
                         // Break address into 3 u64s and write to registers
                         let caller_bytes = caller.as_slice();
@@ -262,14 +258,9 @@ fn execute_riscv(
                         emu.cpu.xregs.write(12, third_u64);
                     }
                     Syscall::Keccak256 => {
-                        let offset: u64 = emu.cpu.xregs.read(10);
-                        let size: u64 = emu.cpu.xregs.read(11);
-
-                        let data_bytes = if size != 0 {
-                            emu.cpu.bus.get_dram_slice(offset..(offset + size)).unwrap()
-                        } else {
-                            &mut []
-                        };
+                        let ret_offset: u64 = emu.cpu.xregs.read(10);
+                        let ret_size: u64 = emu.cpu.xregs.read(11);
+                        let data_bytes = dram_slice(emu, ret_offset, ret_size);
 
                         let mut hasher = Keccak256::new();
                         hasher.update(data_bytes);
@@ -295,5 +286,17 @@ fn execute_riscv(
                 return return_revert(interpreter);
             }
         }
+    }
+}
+
+/// Returns RISC-V DRAM slice in a given size range, starts with a given offset
+fn dram_slice(emu: &mut Emulator, ret_offset: u64, ret_size: u64) -> &mut [u8] {
+    if ret_size != 0 {
+        emu.cpu
+            .bus
+            .get_dram_slice(ret_offset..(ret_offset + ret_size))
+            .unwrap()
+    } else {
+        &mut []
     }
 }
