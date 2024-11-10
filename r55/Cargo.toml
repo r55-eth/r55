@@ -7,9 +7,11 @@ repository.workspace = true
 
 [dependencies]
 #revm = { git = "https://github.com/r0qs/revm" }
+eth-riscv-interpreter.workspace = true
+eth-riscv-syscalls.workspace = true
+
 revm = "9.0.0"
 rvemu = { git = "https://github.com/lvella/rvemu.git" }
-eth-riscv-interpreter = { git = "https://github.com/leonardoalt/r55" }
 alloy-core = "0.7.4"
 alloy-sol-types = "0.7.4"
 
