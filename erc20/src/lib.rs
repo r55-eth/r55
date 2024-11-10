@@ -16,6 +16,9 @@ pub struct ERC20 {
 #[contract]
 impl ERC20 {
     pub fn balance_of(&self, owner: Address) -> u64 {
+        if msg_data()[0] != 0x0 {
+            revert();
+        }
         self.balance.read(owner)
     }
 

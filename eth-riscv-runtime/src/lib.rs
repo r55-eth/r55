@@ -2,7 +2,7 @@
 #![no_main]
 #![feature(alloc_error_handler, maybe_uninit_write_slice, round_char_boundary)]
 
-use alloy_core::primitives::{Address, U256, B256};
+use alloy_core::primitives::{Address, B256, U256};
 use core::arch::asm;
 use core::panic::PanicInfo;
 use core::slice;
@@ -136,6 +136,29 @@ pub fn msg_sig() -> [u8; 4] {
     let mut bytes = [0u8; 4];
     bytes.copy_from_slice(&first.to_le_bytes()[0..4]);
     bytes
+}
+
+pub fn msg_data() -> [u8; 32] {
+    // Get the size of the message data
+    let size: u64;
+    unsafe {
+        asm!("ecall", lateout("a0") size, in("t0") u64::from(Syscall::CALLDATASIZE));
+    }
+    let first: u64;
+    let second: u64;
+    let third: u64;
+    let fourth: u64;
+    // Load 32 bytes of call data
+    let offset: u64 = 0;
+    unsafe {
+        asm!("ecall", in("a0") offset, lateout("a0") first, lateout("a1") second, lateout("a2") third, lateout("a3") fourth, in("t0") u64::from(Syscall::CALLDATALOAD));
+    }
+    let mut bytes = [0u8; 32];
+    bytes[0..8].copy_from_slice(&first.to_le_bytes());
+    bytes[8..16].copy_from_slice(&second.to_le_bytes());
+    bytes[16..24].copy_from_slice(&third.to_le_bytes());
+    bytes[24..32].copy_from_slice(&fourth.to_le_bytes());
+    bytes.try_into().unwrap()
 }
 
 #[allow(non_snake_case)]

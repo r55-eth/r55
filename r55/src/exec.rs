@@ -1,5 +1,6 @@
 use alloy_core::primitives::Keccak256;
 use eth_riscv_interpreter::setup_from_elf;
+use eth_riscv_syscalls::Syscall;
 use revm::{
     handler::register::EvmHandler,
     interpreter::{
@@ -11,7 +12,6 @@ use revm::{
 };
 use rvemu::{emulator::Emulator, exception::Exception};
 use std::{cell::RefCell, ops::Range, rc::Rc, sync::Arc};
-use eth_riscv_syscalls::Syscall;
 
 pub fn deploy_contract(db: &mut InMemoryDB, bytecode: Bytes) -> Address {
     let mut evm = Evm::builder()
@@ -184,7 +184,7 @@ fn execute_riscv(
                                 return return_revert(interpreter);
                             }
                         }
-                        }
+                    }
                     Ok(Syscall::SStore) => {
                         let key: u64 = emu.cpu.xregs.read(10);
                         let value: u64 = emu.cpu.xregs.read(11);
@@ -245,7 +245,8 @@ fn execute_riscv(
                         let caller_bytes = caller.as_slice();
                         let first_u64 = u64::from_be_bytes(caller_bytes[0..8].try_into().unwrap());
                         emu.cpu.xregs.write(10, first_u64);
-                        let second_u64 = u64::from_be_bytes(caller_bytes[8..16].try_into().unwrap());
+                        let second_u64 =
+                            u64::from_be_bytes(caller_bytes[8..16].try_into().unwrap());
                         emu.cpu.xregs.write(11, second_u64);
                         let mut padded_bytes = [0u8; 8];
                         padded_bytes[..4].copy_from_slice(&caller_bytes[16..20]);
@@ -257,10 +258,7 @@ fn execute_riscv(
                         let size: u64 = emu.cpu.xregs.read(11);
 
                         let data_bytes = if size != 0 {
-                            emu.cpu
-                                .bus
-                                .get_dram_slice(offset..(offset + size))
-                                .unwrap()
+                            emu.cpu.bus.get_dram_slice(offset..(offset + size)).unwrap()
                         } else {
                             &mut []
                         };
@@ -270,10 +268,18 @@ fn execute_riscv(
                         let hash: [u8; 32] = hasher.finalize().into();
 
                         // Write the hash to the emulator's registers
-                        emu.cpu.xregs.write(10, u64::from_le_bytes(hash[0..8].try_into().unwrap()));
-                        emu.cpu.xregs.write(11, u64::from_le_bytes(hash[8..16].try_into().unwrap()));
-                        emu.cpu.xregs.write(12, u64::from_le_bytes(hash[16..24].try_into().unwrap()));
-                        emu.cpu.xregs.write(13, u64::from_le_bytes(hash[24..32].try_into().unwrap()));
+                        emu.cpu
+                            .xregs
+                            .write(10, u64::from_le_bytes(hash[0..8].try_into().unwrap()));
+                        emu.cpu
+                            .xregs
+                            .write(11, u64::from_le_bytes(hash[8..16].try_into().unwrap()));
+                        emu.cpu
+                            .xregs
+                            .write(12, u64::from_le_bytes(hash[16..24].try_into().unwrap()));
+                        emu.cpu
+                            .xregs
+                            .write(13, u64::from_le_bytes(hash[24..32].try_into().unwrap()));
                     }
                     Ok(Syscall::CALLVALUE) => {
                         let value = interpreter.contract.call_value;
@@ -285,14 +291,34 @@ fn execute_riscv(
                     }
                     Ok(Syscall::CALLDATALOAD) => {
                         let offset: u64 = emu.cpu.xregs.read(10);
-                        // We only need 32 bytes of call data start from offset
-                        let call_data = interpreter.contract.input.get(offset as usize..(offset + 32) as usize).unwrap();
-                        println!("call_data: {:?}", call_data);
-                        // TODO: handle case where call_data is less than 32 bytes
-                        emu.cpu.xregs.write(10, u64::from_le_bytes(call_data[0..8].try_into().unwrap()));
-                        emu.cpu.xregs.write(11, u64::from_le_bytes(call_data[8..16].try_into().unwrap()));
-                        emu.cpu.xregs.write(12, u64::from_le_bytes(call_data[16..24].try_into().unwrap()));
-                        emu.cpu.xregs.write(13, u64::from_le_bytes(call_data[24..32].try_into().unwrap()));
+                        let mut call_data = [0u8; 32];
+                        // We only need 32 bytes of call data, starting from offset
+                        if let Some(data) = interpreter
+                            .contract
+                            .input
+                            .get(offset as usize..(offset + 32) as usize)
+                        {
+                            call_data[..data.len()].copy_from_slice(data);
+                        }
+
+                        emu.cpu
+                            .xregs
+                            .write(10, u64::from_le_bytes(call_data[0..8].try_into().unwrap()));
+                        emu.cpu
+                            .xregs
+                            .write(11, u64::from_le_bytes(call_data[8..16].try_into().unwrap()));
+                        emu.cpu.xregs.write(
+                            12,
+                            u64::from_le_bytes(call_data[16..24].try_into().unwrap()),
+                        );
+                        emu.cpu.xregs.write(
+                            13,
+                            u64::from_le_bytes(call_data[24..32].try_into().unwrap()),
+                        );
+                    }
+                    Ok(Syscall::CALLDATASIZE) => {
+                        let size = interpreter.contract.input.len();
+                        emu.cpu.xregs.write(10, size as u64);
                     }
                     _ => {
                         println!("Unhandled syscall: {:?}", t0);
