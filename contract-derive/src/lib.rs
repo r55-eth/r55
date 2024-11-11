@@ -49,7 +49,15 @@ pub fn contract(_attr: TokenStream, item: TokenStream) -> TokenStream {
         }).collect();
 
         let arg_names: Vec<_> = (0..method.sig.inputs.len() - 1).map(|i| format_ident!("arg{}", i)).collect();
-
+        let checks = if !is_payable(&method) {
+            quote! {
+                if eth_riscv_runtime::msg_value() > U256::from(0) {
+                    revert();
+                }
+            }
+        } else {
+            quote! {}
+        };
         // Check if the method has a return type
         let return_handling = match &method.sig.output {
             ReturnType::Default => {
@@ -73,6 +81,7 @@ pub fn contract(_attr: TokenStream, item: TokenStream) -> TokenStream {
         quote! {
             #method_selector => {
                 let (#( #arg_names ),*) = <(#( #arg_types ),*)>::abi_decode(calldata, true).unwrap();
+                #checks
                 #return_handling
             }
         }
@@ -120,4 +129,22 @@ pub fn contract(_attr: TokenStream, item: TokenStream) -> TokenStream {
     };
 
     TokenStream::from(output)
+}
+
+// Empty macro to mark a method as payable
+#[proc_macro_attribute]
+pub fn payable(_attr: TokenStream, item: TokenStream) -> TokenStream {
+    item
+}
+
+// Check if a method is tagged with the payable attribute
+fn is_payable(method: &syn::ImplItemMethod) -> bool {
+    method.attrs.iter().any(|attr| {
+        if let Ok(syn::Meta::Path(path)) = attr.parse_meta() {
+            if let Some(segment) = path.segments.first() {
+                return segment.ident == "payable";
+            }
+        }
+        false
+    })
 }
