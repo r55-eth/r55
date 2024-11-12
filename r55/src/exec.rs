@@ -154,7 +154,7 @@ fn execute_riscv(
         match run_result {
             Err(Exception::EnvironmentCallFromMMode) => {
                 let t0: u64 = emu.cpu.xregs.read(5);
-                match Syscall::try_from(t0) {
+                match Syscall::try_from(t0 as u8) {
                     Ok(Syscall::Return) => {
                         let ret_offset: u64 = emu.cpu.xregs.read(10);
                         let ret_size: u64 = emu.cpu.xregs.read(11);
