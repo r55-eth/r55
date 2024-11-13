@@ -13,6 +13,8 @@ use std_alloc::vec::Vec;
 mod alloc;
 pub mod types;
 
+const CALLDATA_ADDRESS: usize = 0x8000_0000;
+
 pub trait Contract {
     fn call(&self);
     fn call_with_data(&self, calldata: &[u8]);
@@ -130,41 +132,15 @@ pub fn msg_value() -> U256 {
 }
 
 pub fn msg_sig() -> [u8; 4] {
-    let first: u64;
-    let offset: u64 = 0;
-    unsafe {
-        asm!("ecall", lateout("a0") first, in("a0") offset, in("t0") u8::from(Syscall::CALLDATALOAD));
-    }
-    let mut bytes = [0u8; 4];
-    bytes.copy_from_slice(&first.to_le_bytes()[0..4]);
-    bytes
+    let sig = unsafe { slice_from_raw_parts(CALLDATA_ADDRESS + 8, 4) };
+    sig.try_into().unwrap()
 }
 
 pub fn msg_data() -> Vec<u8> {
-    // Get the size of the call data
-    let size: u64;
-    unsafe {
-        asm!("ecall", lateout("a0") size, in("t0") u8::from(Syscall::CALLDATASIZE));
-    }
-    // Load the call data
-    let mut call_data = Vec::with_capacity(size as usize);
-    for offset in (0..size).step_by(32) {
-        let first: u64;
-        let second: u64;
-        let third: u64;
-        let fourth: u64;
-        // Load 32 bytes of call data
-        unsafe {
-        asm!("ecall", in("a0") offset, lateout("a0") first, lateout("a1") second, lateout("a2") third, lateout("a3") fourth, in("t0") u8::from(Syscall::CALLDATALOAD));
-        }
-        let mut bytes = [0u8; 32];
-        bytes[0..8].copy_from_slice(&first.to_le_bytes());
-        bytes[8..16].copy_from_slice(&second.to_le_bytes());
-        bytes[16..24].copy_from_slice(&third.to_le_bytes());
-        bytes[24..32].copy_from_slice(&fourth.to_le_bytes());
-        call_data.extend_from_slice(&bytes);
-    }
-    call_data
+    let length = unsafe { slice_from_raw_parts(CALLDATA_ADDRESS, 8) };
+    let length = u64::from_le_bytes([length[0], length[1], length[2], length[3], length[4], length[5], length[6], length[7]]) as usize;
+    let calldata = unsafe { slice_from_raw_parts(CALLDATA_ADDRESS + 8, length) };
+    calldata.to_vec()
 }
 
 #[allow(non_snake_case)]

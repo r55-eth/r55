@@ -289,37 +289,6 @@ fn execute_riscv(
                         emu.cpu.xregs.write(12, limbs[2]);
                         emu.cpu.xregs.write(13, limbs[3]);
                     }
-                    Ok(Syscall::CALLDATALOAD) => {
-                        let offset: u64 = emu.cpu.xregs.read(10);
-                        let mut call_data = [0u8; 32];
-                        // We only need 32 bytes of call data, starting from offset
-                        if let Some(data) = interpreter
-                            .contract
-                            .input
-                            .get(offset as usize..(offset + 32) as usize)
-                        {
-                            call_data[..data.len()].copy_from_slice(data);
-                        }
-
-                        emu.cpu
-                            .xregs
-                            .write(10, u64::from_le_bytes(call_data[0..8].try_into().unwrap()));
-                        emu.cpu
-                            .xregs
-                            .write(11, u64::from_le_bytes(call_data[8..16].try_into().unwrap()));
-                        emu.cpu.xregs.write(
-                            12,
-                            u64::from_le_bytes(call_data[16..24].try_into().unwrap()),
-                        );
-                        emu.cpu.xregs.write(
-                            13,
-                            u64::from_le_bytes(call_data[24..32].try_into().unwrap()),
-                        );
-                    }
-                    Ok(Syscall::CALLDATASIZE) => {
-                        let size = interpreter.contract.input.len();
-                        emu.cpu.xregs.write(10, size as u64);
-                    }
                     _ => {
                         println!("Unhandled syscall: {:?}", t0);
                         return return_revert(interpreter);

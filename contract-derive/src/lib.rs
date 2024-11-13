@@ -94,11 +94,7 @@ pub fn contract(_attr: TokenStream, item: TokenStream) -> TokenStream {
 
         impl Contract for #struct_name {
             fn call(&self) {
-                let address: usize = 0x8000_0000;
-                let length = unsafe { slice_from_raw_parts(address, 8) };
-                let length = u64::from_le_bytes([length[0], length[1], length[2], length[3], length[4], length[5], length[6], length[7]]) as usize;
-                let calldata = unsafe { slice_from_raw_parts(address + 8, length) };
-                self.call_with_data(calldata);
+                self.call_with_data(&msg_data());
             }
 
             fn call_with_data(&self, calldata: &[u8]) {
