@@ -7,8 +7,6 @@ use core::arch::asm;
 use core::panic::PanicInfo;
 use core::slice;
 pub use riscv_rt::entry;
-extern crate alloc as std_alloc;
-use std_alloc::vec::Vec;
 
 mod alloc;
 pub mod types;
@@ -126,7 +124,7 @@ pub fn msg_value() -> U256 {
     let third: u64;
     let fourth: u64;
     unsafe {
-        asm!("ecall", lateout("a0") first, lateout("a1") second, lateout("a2") third, lateout("a3") fourth, in("t0") u8::from(Syscall::CALLVALUE));
+        asm!("ecall", lateout("a0") first, lateout("a1") second, lateout("a2") third, lateout("a3") fourth, in("t0") u8::from(Syscall::CallValue));
     }
     U256::from_limbs([first, second, third, fourth])
 }
@@ -136,11 +134,10 @@ pub fn msg_sig() -> [u8; 4] {
     sig.try_into().unwrap()
 }
 
-pub fn msg_data() -> Vec<u8> {
+pub fn msg_data() -> &'static [u8] {
     let length = unsafe { slice_from_raw_parts(CALLDATA_ADDRESS, 8) };
     let length = u64::from_le_bytes([length[0], length[1], length[2], length[3], length[4], length[5], length[6], length[7]]) as usize;
-    let calldata = unsafe { slice_from_raw_parts(CALLDATA_ADDRESS + 8, length) };
-    calldata.to_vec()
+    unsafe { slice_from_raw_parts(CALLDATA_ADDRESS + 8, length) }
 }
 
 #[allow(non_snake_case)]

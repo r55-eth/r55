@@ -52,6 +52,7 @@ macro_rules! syscalls {
 // t0: 4, opcode for revert, doesn't return
 // t0: 5, opcode for caller, returns an address
 // t0: 0x20, opcode for keccak256, a0: offset, a1: size, returns keccak256 hash
+// t0: 0x34, opcode for callvalue, a0: first limb, a1: second limb, a2: third limb, a3: fourth limb, returns 256-bit value
 syscalls!(
     (0, Return, "return"),
     (1, SLoad, "sload"),
@@ -60,5 +61,5 @@ syscalls!(
     (4, Revert, "revert"),
     (5, Caller, "caller"),
     (0x20, Keccak256, "keccak256"),
-    (34, CALLVALUE, "callvalue"),
+    (0x34, CallValue, "callvalue"),
 );

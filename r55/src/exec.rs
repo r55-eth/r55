@@ -281,7 +281,7 @@ fn execute_riscv(
                             .xregs
                             .write(13, u64::from_le_bytes(hash[24..32].try_into().unwrap()));
                     }
-                    Ok(Syscall::CALLVALUE) => {
+                    Ok(Syscall::CallValue) => {
                         let value = interpreter.contract.call_value;
                         let limbs = value.into_limbs();
                         emu.cpu.xregs.write(10, limbs[0]);

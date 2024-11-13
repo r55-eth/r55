@@ -16,9 +16,6 @@ pub struct ERC20 {
 #[contract]
 impl ERC20 {
     pub fn balance_of(&self, owner: Address) -> u64 {
-        if msg_data()[0] != 0x0 {
-            revert();
-        }
         self.balance.read(owner)
     }
 
@@ -38,9 +35,6 @@ impl ERC20 {
     pub fn mint(&self, to: Address, value: u64) {
         let owner = msg_sender();
         if owner != address!("0000000000000000000000000000000000000007") {
-            revert();
-        }
-        if msg_sig() != [2, 0, 0, 0] {
             revert();
         }
 
