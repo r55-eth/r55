@@ -1,4 +1,5 @@
 extern crate proc_macro;
+use alloy_core::primitives::keccak256;
 use proc_macro::TokenStream;
 use quote::{format_ident, quote};
 use syn::{parse_macro_input, ImplItem, ItemImpl};
@@ -31,9 +32,13 @@ pub fn contract(_attr: TokenStream, item: TokenStream) -> TokenStream {
         }
     }
 
-    let match_arms: Vec<_> = public_methods.iter().enumerate().map(|(index, method)| {
+    let match_arms: Vec<_> = public_methods.iter().enumerate().map(|(_, method)| {
         let method_name = &method.sig.ident;
-        let method_selector = index as u32;
+        let method_selector = u32::from_be_bytes(
+            keccak256(
+                method_name.to_string()
+            )[..4].try_into().unwrap_or_default()
+        );
         let arg_types: Vec<_> = method.sig.inputs.iter().skip(1).map(|arg| {
             if let FnArg::Typed(pat_type) = arg {
                 let ty = &*pat_type.ty;
@@ -88,7 +93,7 @@ pub fn contract(_attr: TokenStream, item: TokenStream) -> TokenStream {
             }
 
             fn call_with_data(&self, calldata: &[u8]) {
-                let selector = u32::from_le_bytes([calldata[0], calldata[1], calldata[2], calldata[3]]);
+                let selector = u32::from_be_bytes([calldata[0], calldata[1], calldata[2], calldata[3]]);
                 let calldata = &calldata[4..];
 
                 match selector {
