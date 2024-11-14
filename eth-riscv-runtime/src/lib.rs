@@ -141,6 +141,15 @@ pub fn msg_data() -> &'static [u8] {
     unsafe { slice_from_raw_parts(CALLDATA_ADDRESS + 8, length) }
 }
 
+pub fn tx_gas_price() -> U256 {
+    let first: u64;
+    let second: u64;
+    let third: u64;
+    let fourth: u64;
+    unsafe { asm!("ecall", lateout("a0") first, lateout("a1") second, lateout("a2") third, lateout("a3") fourth, in("t0") u8::from(Syscall::GasPrice)) }
+    U256::from_limbs([first, second, third, fourth])
+}
+
 #[allow(non_snake_case)]
 #[no_mangle]
 fn DefaultHandler() {

@@ -52,6 +52,7 @@ macro_rules! syscalls {
 // t0: 0x20, opcode for keccak256, a0: offset, a1: size, returns keccak256 hash
 // t0: 0x33, opcode for caller, returns an address
 // t0: 0x34, opcode for callvalue, a0: first limb, a1: second limb, a2: third limb, a3: fourth limb, returns 256-bit value
+// t0: 0x3A, opcode for gasprice, returns 256-bit value
 // t0: 0x54, opcode for sload, a0: storage key, returns 64-bit value in a0
 // t0: 0x55, opcode for sstore, a0: storage key, a1: storage value, returns nothing
 // t0: 0xf1, opcode for call, args: TODO
@@ -61,6 +62,7 @@ syscalls!(
     (0x20, Keccak256, "keccak256"),
     (0x33, Caller, "caller"),
     (0x34, CallValue, "callvalue"),
+    (0x3A, GasPrice, "gasprice"),
     (0x42, Timestamp, "timestamp"),
     (0x43, Number, "number"),
     (0x45, GasLimit, "gaslimit"),

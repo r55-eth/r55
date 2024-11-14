@@ -48,10 +48,11 @@ pub fn run_tx(db: &mut InMemoryDB, addr: &Address, calldata: Vec<u8>) {
             tx.transact_to = TransactTo::Call(*addr);
             tx.data = calldata.into();
             tx.value = U256::from(0);
+            tx.gas_price = U256::from(42);
+            tx.gas_limit = 100_000;
         })
         .append_handler_register(handle_register)
         .build();
-
     let result = evm.transact_commit().unwrap();
 
     match result {
@@ -319,6 +320,14 @@ fn execute_riscv(
                     Syscall::Timestamp => {
                         let timestamp = host.env().block.timestamp;
                         let limbs = timestamp.as_limbs();
+                        emu.cpu.xregs.write(10, limbs[0]);
+                        emu.cpu.xregs.write(11, limbs[1]);
+                        emu.cpu.xregs.write(12, limbs[2]);
+                        emu.cpu.xregs.write(13, limbs[3]);
+                    }
+                    Syscall::GasPrice => {
+                        let value = host.env().tx.gas_price;
+                        let limbs = value.as_limbs();
                         emu.cpu.xregs.write(10, limbs[0]);
                         emu.cpu.xregs.write(11, limbs[1]);
                         emu.cpu.xregs.write(12, limbs[2]);

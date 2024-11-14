@@ -37,6 +37,9 @@ impl ERC20 {
         if owner != address!("0000000000000000000000000000000000000007") {
             revert();
         }
+        if tx_gas_price() != U256::from(42) {
+            revert();
+        }
 
         let to_balance = self.balance.read(to);
         self.balance.write(to, to_balance + value);
