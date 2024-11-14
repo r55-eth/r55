@@ -1,5 +1,7 @@
-use super::error::{Error, Result};
+
+
 use alloy_core::primitives::Keccak256;
+use core::{cell::RefCell, ops::Range};
 use eth_riscv_interpreter::setup_from_elf;
 use eth_riscv_syscalls::Syscall;
 use revm::{
@@ -12,7 +14,9 @@ use revm::{
     Database, Evm, Frame, FrameOrResult, InMemoryDB,
 };
 use rvemu::{emulator::Emulator, exception::Exception};
-use std::{cell::RefCell, ops::Range, rc::Rc, sync::Arc};
+use std::{rc::Rc, sync::Arc};
+
+use super::error::{Error, Result};
 
 pub fn deploy_contract(db: &mut InMemoryDB, bytecode: Bytes) -> Result<Address> {
     let mut evm = Evm::builder()

@@ -25,8 +25,8 @@ where
     #[error(transparent)]
     TryFromSliceError(#[from] std::array::TryFromSliceError),
     /// Unhandled syscall error
-    #[error("Unhandled syscall: {0}")]
-    UnhandledSyscall(u8),
+    #[error("Syscall error: {0}")]
+    SyscallError(eth_riscv_syscalls::Error),
     /// Unexpected result of the transaction execution error
     #[error("Unexpected result of the transaction execution : {0:?}")]
     UnexpectedExecResult(ExecutionResult),
@@ -38,6 +38,15 @@ impl From<Exception> for Error {
     #[inline]
     fn from(exception: Exception) -> Self {
         Self::RvEmuException(exception)
+    }
+}
+
+// Note: this `From` implementation here because `eth_riscv_syscalls::Error`
+// doesn't implements std error trait.
+impl From<eth_riscv_syscalls::Error> for Error {
+    #[inline]
+    fn from(err: eth_riscv_syscalls::Error) -> Self {
+        Self::SyscallError(err)
     }
 }
 
