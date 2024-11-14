@@ -288,6 +288,42 @@ fn execute_riscv(
                         emu.cpu.xregs.write(12, limbs[2]);
                         emu.cpu.xregs.write(13, limbs[3]);
                     }
+                    Syscall::BaseFee => {
+                        let value = host.env().block.basefee;
+                        let limbs = value.as_limbs();
+                        emu.cpu.xregs.write(10, limbs[0]);
+                        emu.cpu.xregs.write(11, limbs[1]);
+                        emu.cpu.xregs.write(12, limbs[2]);
+                        emu.cpu.xregs.write(13, limbs[3]);
+                    }
+                    Syscall::ChainId => {
+                        let value = host.env().tx.chain_id.unwrap_or_default();
+                        emu.cpu.xregs.write(10, value);
+                    }
+                    Syscall::GasLimit => {
+                        let limit = host.env().block.gas_limit;
+                        let limbs = limit.as_limbs();
+                        emu.cpu.xregs.write(10, limbs[0]);
+                        emu.cpu.xregs.write(11, limbs[1]);
+                        emu.cpu.xregs.write(12, limbs[2]);
+                        emu.cpu.xregs.write(13, limbs[3]);
+                    }
+                    Syscall::Number => {
+                        let number = host.env().block.number;
+                        let limbs = number.as_limbs();
+                        emu.cpu.xregs.write(10, limbs[0]);
+                        emu.cpu.xregs.write(11, limbs[1]);
+                        emu.cpu.xregs.write(12, limbs[2]);
+                        emu.cpu.xregs.write(13, limbs[3]);
+                    }
+                    Syscall::Timestamp => {
+                        let timestamp = host.env().block.timestamp;
+                        let limbs = timestamp.as_limbs();
+                        emu.cpu.xregs.write(10, limbs[0]);
+                        emu.cpu.xregs.write(11, limbs[1]);
+                        emu.cpu.xregs.write(12, limbs[2]);
+                        emu.cpu.xregs.write(13, limbs[3]);
+                    }
                 }
             }
             _ => {

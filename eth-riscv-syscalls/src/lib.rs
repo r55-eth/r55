@@ -61,9 +61,18 @@ syscalls!(
     (0x20, Keccak256, "keccak256"),
     (0x33, Caller, "caller"),
     (0x34, CallValue, "callvalue"),
+    (0x42, Timestamp, "timestamp"),
+    (0x43, Number, "number"),
+    (0x45, GasLimit, "gaslimit"),
+    (0x46, ChainId, "chainid"),
+    (0x48, BaseFee, "basefee"),
     (0x54, SLoad, "sload"),
     (0x55, SStore, "sstore"),
     (0xf1, Call, "call"),
     (0xf3, Return, "return"),
-    (0xfd, Revert, "revert")
+    (0xfd, Revert, "revert"),
+    // (0x4A, BlobBaseFee, "blobbasefee") Disabled for L2
+    // coinbase is also disabled as it is implementation specific and depends on the L2 used
+    // block.difficulty is also disabled as L2s don't have PoW security model
+    // prevrandao is not used as there is no beacon chain to provide randomness
 );

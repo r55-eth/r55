@@ -10,6 +10,7 @@ pub use riscv_rt::entry;
 
 mod alloc;
 pub mod types;
+pub mod block;
 
 const CALLDATA_ADDRESS: usize = 0x8000_0000;
 
