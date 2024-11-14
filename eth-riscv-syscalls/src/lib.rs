@@ -44,7 +44,11 @@ macro_rules! syscalls {
     }
 }
 
-// Generate `Syscall` enum with supported syscalls and their numbers.
+// Generate `Syscall` enum with supported syscalls and their ids.
+//
+// The opcode for each syscall matches the corresponding EVM opcode,
+// as described on https://www.evm.codes.
+//
 // t0: 0x20, opcode for keccak256, a0: offset, a1: size, returns keccak256 hash
 // t0: 0x33, opcode for caller, returns an address
 // t0: 0x54, opcode for sload, a0: storage key, returns 64-bit value in a0
