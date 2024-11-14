@@ -127,19 +127,17 @@ fn test_runtime_from_binary() {
 
     add_contract_to_db(&mut db, CONTRACT_ADDR, bytecode);
 
-    let selector_balance: u32 = 0;
-    let selector_mint: u32 = 2;
+    let selector_balance = &keccak256("balance_of")[0..4];
+    let selector_mint = &keccak256("mint")[0..4];
     let to: Address = address!("0000000000000000000000000000000000000001");
     let value_mint: u64 = 42;
     let mut calldata_balance = to.abi_encode();
     let mut calldata_mint = (to, value_mint).abi_encode();
 
-    let selector_bytes_balance = selector_balance.to_le_bytes().to_vec();
-    let mut complete_calldata_balance = selector_bytes_balance;
+    let mut complete_calldata_balance = selector_balance.to_vec();
     complete_calldata_balance.append(&mut calldata_balance);
 
-    let selector_bytes_mint = selector_mint.to_le_bytes().to_vec();
-    let mut complete_calldata_mint = selector_bytes_mint;
+    let mut complete_calldata_mint = selector_mint.to_vec();
     complete_calldata_mint.append(&mut calldata_mint);
 
     run_tx(&mut db, &CONTRACT_ADDR, complete_calldata_mint.clone());
@@ -154,19 +152,17 @@ fn test_runtime_from_binary() {
 }
 
 fn test_runtime(addr: &Address, db: &mut InMemoryDB) {
-    let selector_balance: u32 = 0;
-    let selector_mint: u32 = 2;
+    let selector_balance = &keccak256("balance_of")[0..4];
+    let selector_mint = &keccak256("mint")[0..4];
     let to: Address = address!("0000000000000000000000000000000000000001");
     let value_mint: u64 = 42;
     let mut calldata_balance = to.abi_encode();
     let mut calldata_mint = (to, value_mint).abi_encode();
 
-    let selector_bytes_balance = selector_balance.to_le_bytes().to_vec();
-    let mut complete_calldata_balance = selector_bytes_balance;
+    let mut complete_calldata_balance = selector_balance.to_vec();
     complete_calldata_balance.append(&mut calldata_balance);
 
-    let selector_bytes_mint = selector_mint.to_le_bytes().to_vec();
-    let mut complete_calldata_mint = selector_bytes_mint;
+    let mut complete_calldata_mint = selector_mint.to_vec();
     complete_calldata_mint.append(&mut calldata_mint);
 
     run_tx(db, addr, complete_calldata_mint.clone());

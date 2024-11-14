@@ -3,10 +3,10 @@
 
 use core::default::Default;
 
-use contract_derive::contract;
+use contract_derive::{contract, payable};
 use eth_riscv_runtime::types::Mapping;
 
-use alloy_core::primitives::{Address, address};
+use alloy_core::primitives::{Address, address, U256};
 
 #[derive(Default)]
 pub struct ERC20 {
@@ -31,6 +31,7 @@ impl ERC20 {
         self.balance.write(to, to_balance + value);
     }
 
+    #[payable]
     pub fn mint(&self, to: Address, value: u64) {
         let owner = msg_sender();
         if owner != address!("0000000000000000000000000000000000000007") {
