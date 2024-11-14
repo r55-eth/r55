@@ -1,6 +1,9 @@
 mod exec;
 use exec::{deploy_contract, run_tx};
 
+mod error;
+use error::Result;
+
 use std::fs::File;
 use std::io::Read;
 use std::process::Command;
@@ -11,7 +14,7 @@ use revm::{
     InMemoryDB,
 };
 
-fn compile_runtime(path: &str) -> Result<Vec<u8>, ()> {
+fn compile_runtime(path: &str) -> eyre::Result<Vec<u8>> {
     println!("Compiling runtime: {}", path);
     let status = Command::new("cargo")
         .arg("+nightly-2024-02-01")
@@ -42,22 +45,20 @@ fn compile_runtime(path: &str) -> Result<Vec<u8>, ()> {
     let mut file = match File::open(path) {
         Ok(file) => file,
         Err(e) => {
-            eprintln!("Failed to open file: {}", e);
-            return Err(());
+            eyre::bail!("Failed to open file: {}", e);
         }
     };
 
     // Read the file contents into a vector.
     let mut bytecode = Vec::new();
     if let Err(e) = file.read_to_end(&mut bytecode) {
-        eprintln!("Failed to read file: {}", e);
-        return Err(());
+        eyre::bail!("Failed to read file: {}", e);
     }
 
     Ok(bytecode)
 }
 
-fn compile_deploy(path: &str) -> Result<Vec<u8>, ()> {
+fn compile_deploy(path: &str) -> eyre::Result<Vec<u8>> {
     compile_runtime(path)?;
     println!("Compiling deploy: {}", path);
     let status = Command::new("cargo")
@@ -89,16 +90,14 @@ fn compile_deploy(path: &str) -> Result<Vec<u8>, ()> {
     let mut file = match File::open(path) {
         Ok(file) => file,
         Err(e) => {
-            eprintln!("Failed to open file: {}", e);
-            return Err(());
+            eyre::bail!("Failed to open file: {}", e);
         }
     };
 
     // Read the file contents into a vector.
     let mut bytecode = Vec::new();
     if let Err(e) = file.read_to_end(&mut bytecode) {
-        eprintln!("Failed to read file: {}", e);
-        return Err(());
+        eyre::bail!("Failed to read file: {}", e);
     }
 
     Ok(bytecode)
@@ -114,8 +113,8 @@ fn add_contract_to_db(db: &mut InMemoryDB, addr: Address, bytecode: Bytes) {
     db.insert_account_info(addr, account);
 }
 
-fn test_runtime_from_binary() {
-    let rv_bytecode = compile_runtime("erc20").unwrap();
+fn test_runtime_from_binary() -> eyre::Result<()> {
+    let rv_bytecode = compile_runtime("erc20")?;
 
     const CONTRACT_ADDR: Address = address!("0d4a11d5EEaaC28EC3F61d100daF4d40471f1852");
     let mut db = InMemoryDB::default();
@@ -140,8 +139,10 @@ fn test_runtime_from_binary() {
     let mut complete_calldata_mint = selector_mint.to_vec();
     complete_calldata_mint.append(&mut calldata_mint);
 
-    run_tx(&mut db, &CONTRACT_ADDR, complete_calldata_mint.clone());
-    run_tx(&mut db, &CONTRACT_ADDR, complete_calldata_balance.clone());
+    run_tx(&mut db, &CONTRACT_ADDR, complete_calldata_mint.clone())?;
+    run_tx(&mut db, &CONTRACT_ADDR, complete_calldata_balance.clone())?;
+
+    Ok(())
 
     /*
     let account_db = &evm.db().accounts[&CONTRACT_ADDR];
@@ -151,7 +152,7 @@ fn test_runtime_from_binary() {
     */
 }
 
-fn test_runtime(addr: &Address, db: &mut InMemoryDB) {
+fn test_runtime(addr: &Address, db: &mut InMemoryDB) -> Result<()> {
     let selector_balance = &keccak256("balance_of")[0..4];
     let selector_mint = &keccak256("mint")[0..4];
     let to: Address = address!("0000000000000000000000000000000000000001");
@@ -165,12 +166,14 @@ fn test_runtime(addr: &Address, db: &mut InMemoryDB) {
     let mut complete_calldata_mint = selector_mint.to_vec();
     complete_calldata_mint.append(&mut calldata_mint);
 
-    run_tx(db, addr, complete_calldata_mint.clone());
-    run_tx(db, addr, complete_calldata_balance.clone());
+    run_tx(db, addr, complete_calldata_mint.clone())?;
+    run_tx(db, addr, complete_calldata_balance.clone())?;
+
+    Ok(())
 }
 
-fn test_deploy() {
-    let rv_bytecode = compile_deploy("erc20").unwrap();
+fn test_deploy() -> eyre::Result<()> {
+    let rv_bytecode = compile_deploy("erc20")?;
     let mut db = InMemoryDB::default();
 
     let mut bytecode = vec![0xff];
@@ -178,12 +181,13 @@ fn test_deploy() {
 
     let bytecode = Bytes::from(bytecode);
 
-    let addr = deploy_contract(&mut db, bytecode);
+    let addr = deploy_contract(&mut db, bytecode)?;
 
-    test_runtime(&addr, &mut db);
+    test_runtime(&addr, &mut db)?;
+    Ok(())
 }
 
-fn main() {
-    test_runtime_from_binary();
-    test_deploy();
+fn main() -> eyre::Result<()> {
+    test_runtime_from_binary()?;
+    test_deploy()
 }
