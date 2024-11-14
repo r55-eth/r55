@@ -7,4 +7,10 @@ repository.workspace = true
 
 [dependencies]
 rvemu = { git = "https://github.com/lvella/rvemu.git" }
-goblin = "0.8.2"
+
+thiserror.workspace = true
+
+goblin = { version = "0.8.2", features = ["std"] }
+
+[dev-dependencies]
+eyre.workspace = true

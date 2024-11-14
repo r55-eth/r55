@@ -1,5 +1,3 @@
-
-
 use alloy_core::primitives::Keccak256;
 use core::{cell::RefCell, ops::Range};
 use eth_riscv_interpreter::setup_from_elf;
@@ -83,11 +81,17 @@ fn riscv_context(frame: &Frame) -> Option<RVEmu> {
     let Some((0xFF, bytecode)) = interpreter.bytecode.split_first() else {
         return None;
     };
-    let emu = setup_from_elf(bytecode, &interpreter.contract.input);
-    Some(RVEmu {
-        emu,
-        returned_data_destiny: None,
-    })
+
+    match setup_from_elf(bytecode, &interpreter.contract.input) {
+        Ok(emu) => Some(RVEmu {
+            emu,
+            returned_data_destiny: None,
+        }),
+        Err(err) => {
+            println!("Failed to setup from ELF: {err}");
+            None
+        }
+    }
 }
 
 pub fn handle_register<EXT, DB: Database>(handler: &mut EvmHandler<'_, EXT, DB>) {

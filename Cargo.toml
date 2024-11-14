@@ -16,3 +16,6 @@ repository = "https://github.com/leonardoalt/r5"
 [workspace.dependencies]
 eth-riscv-interpreter = { path = "eth-riscv-interpreter" }
 eth-riscv-syscalls = { path = "eth-riscv-syscalls" }
+
+eyre = "0.6.12"
+thiserror = "2.0.3"
