@@ -71,8 +71,4 @@ syscalls!(
     (0xf1, Call, "call"),
     (0xf3, Return, "return"),
     (0xfd, Revert, "revert"),
-    // (0x4A, BlobBaseFee, "blobbasefee") Disabled for L2
-    // coinbase is also disabled as it is implementation specific and depends on the L2 used
-    // block.difficulty is also disabled as L2s don't have PoW security model
-    // prevrandao is not used as there is no beacon chain to provide randomness
 );

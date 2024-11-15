@@ -297,7 +297,7 @@ fn execute_riscv(
                         emu.cpu.xregs.write(13, limbs[3]);
                     }
                     Syscall::ChainId => {
-                        let value = host.env().tx.chain_id.unwrap_or_default();
+                        let value = host.env().cfg.chain_id;
                         emu.cpu.xregs.write(10, value);
                     }
                     Syscall::GasLimit => {
