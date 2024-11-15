@@ -1,5 +1,10 @@
 #![no_std]
 
+extern crate alloc;
+
+mod error;
+pub use error::Error;
+
 macro_rules! syscalls {
     ($(($num:expr, $identifier:ident, $name:expr)),* $(,)?) => {
         #[derive(Copy, Clone, Ord, PartialOrd, Eq, PartialEq, Hash)]
@@ -17,11 +22,11 @@ macro_rules! syscalls {
         }
 
         impl core::str::FromStr for Syscall {
-            type Err = ();
+            type Err = Error;
             fn from_str(input: &str) -> Result<Self, Self::Err> {
                 match input {
                     $($name => Ok(Syscall::$identifier)),*,
-                    _ => Err(()),
+                    name => Err(Error::ParseError { input: alloc::string::String::from(name).into() }),
                 }
             }
         }
@@ -33,11 +38,11 @@ macro_rules! syscalls {
         }
 
         impl core::convert::TryFrom<u8> for Syscall {
-            type Error = ();
+            type Error = Error;
             fn try_from(value: u8) -> Result<Self, Self::Error> {
                 match value {
                     $($num => Ok(Syscall::$identifier)),*,
-                    _ => Err(()),
+                    num => Err(Error::UnknownOpcode(num)),
                 }
             }
         }

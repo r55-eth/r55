@@ -1,9 +1,10 @@
 use rvemu::{bus::DRAM_BASE, dram::DRAM_SIZE, emulator::Emulator};
 
-pub fn setup_from_elf(elf_data: &[u8], call_data: &[u8]) -> Emulator {
-    let elf = goblin::elf::Elf::parse(elf_data)
-        .map_err(|_| "Failed to parse ELF")
-        .unwrap();
+mod error;
+pub use error::{Error, Result};
+
+pub fn setup_from_elf(elf_data: &[u8], call_data: &[u8]) -> Result<Emulator> {
+    let elf = goblin::elf::Elf::parse(elf_data)?;
 
     // Allocate 1MB for the call data
     let mut mem = vec![0; 1024 * 1024];
@@ -22,7 +23,7 @@ pub fn setup_from_elf(elf_data: &[u8], call_data: &[u8]) -> Emulator {
     emu.initialize_dram(mem);
     emu.initialize_pc(elf.header.e_entry);
 
-    emu
+    Ok(emu)
 }
 
 fn load_sections(mem: &mut Vec<u8>, elf: &goblin::elf::Elf, elf_data: &[u8]) {
@@ -56,10 +57,10 @@ mod tests {
     use std::fs;
 
     #[test]
-    fn test_execute_elf() {
-        let elf_data = fs::read("../asm-runtime-example/runtime").unwrap();
-        let mut emu = setup_from_elf(&elf_data, &[]);
-        let result: Result<(), Exception> = emu.start();
+    fn test_execute_elf() -> eyre::Result<()> {
+        let elf_data = fs::read("../asm-runtime-example/runtime")?;
+        let mut emu = setup_from_elf(&elf_data, &[])?;
+        let result = emu.start();
         assert_eq!(result, Err(Exception::EnvironmentCallFromMMode));
         let t0 = emu.cpu.xregs.read(5);
         let a0 = emu.cpu.xregs.read(10);
@@ -69,7 +70,9 @@ mod tests {
         assert_eq!(a1, 8); // data returned should be a little-endian u64
         let data_bytes = emu.cpu.bus.get_dram_slice(a0..(a0 + a1)).unwrap();
 
-        let data = u64::from_le_bytes(data_bytes.try_into().unwrap());
+        let data = u64::from_le_bytes(data_bytes.try_into()?);
         assert_eq!(data, 5);
+
+        Ok(())
     }
 }
