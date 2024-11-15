@@ -11,6 +11,7 @@ pub use riscv_rt::entry;
 mod alloc;
 pub mod types;
 pub mod block;
+pub mod tx;
 
 const CALLDATA_ADDRESS: usize = 0x8000_0000;
 
@@ -139,29 +140,6 @@ pub fn msg_data() -> &'static [u8] {
     let length = unsafe { slice_from_raw_parts(CALLDATA_ADDRESS, 8) };
     let length = u64::from_le_bytes([length[0], length[1], length[2], length[3], length[4], length[5], length[6], length[7]]) as usize;
     unsafe { slice_from_raw_parts(CALLDATA_ADDRESS + 8, length) }
-}
-
-pub fn tx_gas_price() -> U256 {
-    let first: u64;
-    let second: u64;
-    let third: u64;
-    let fourth: u64;
-    unsafe { asm!("ecall", lateout("a0") first, lateout("a1") second, lateout("a2") third, lateout("a3") fourth, in("t0") u8::from(Syscall::GasPrice)) }
-    U256::from_limbs([first, second, third, fourth])
-}
-
-pub fn tx_origin() -> Address {
-    let first: u64;
-    let second: u64;
-    let third: u64;
-    unsafe {
-        asm!("ecall", lateout("a0") first, lateout("a1") second, lateout("a2") third, in("t0") u8::from(Syscall::Origin));
-    }
-    let mut bytes = [0u8; 20];
-    bytes[0..8].copy_from_slice(&first.to_be_bytes());
-    bytes[8..16].copy_from_slice(&second.to_be_bytes());
-    bytes[16..20].copy_from_slice(&third.to_be_bytes()[..4]);
-    Address::from_slice(&bytes)
 }
 
 #[allow(non_snake_case)]
