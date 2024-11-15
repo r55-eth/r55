@@ -155,7 +155,7 @@ pub fn tx_origin() -> Address {
     let second: u64;
     let third: u64;
     unsafe {
-        asm!("ecall", lateout("a0") first, lateout("a1") second, lateout("a2") third, in("t0") u32::from(Syscall::Origin));
+        asm!("ecall", lateout("a0") first, lateout("a1") second, lateout("a2") third, in("t0") u8::from(Syscall::Origin));
     }
     let mut bytes = [0u8; 20];
     bytes[0..8].copy_from_slice(&first.to_be_bytes());
