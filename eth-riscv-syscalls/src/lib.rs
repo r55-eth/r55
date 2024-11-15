@@ -58,5 +58,5 @@ syscalls!(
     (3, Call, "call"),
     (4, Revert, "revert"),
     (5, Caller, "caller"),
-    (6, Log, "log"),
+    (0xA0, Log, "log"),
 );
