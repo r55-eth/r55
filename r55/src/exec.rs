@@ -11,7 +11,15 @@ use revm::{
     Database, Evm, Frame, FrameOrResult, InMemoryDB,
 };
 use rvemu::{emulator::Emulator, exception::Exception};
-use std::{cell::RefCell, ops::Range, rc::Rc, sync::Arc};
+use std::{cell::RefCell, ops::Range, rc::Rc};
+
+use std::sync::Arc;
+use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
+use tokio::net::{TcpListener, TcpStream};
+
+use std::io::Write;
+use std::process::Command;
+use tempfile::NamedTempFile;
 
 pub fn deploy_contract(db: &mut InMemoryDB, bytecode: Bytes) -> Address {
     let mut evm = Evm::builder()
@@ -22,7 +30,7 @@ pub fn deploy_contract(db: &mut InMemoryDB, bytecode: Bytes) -> Address {
             tx.data = bytecode;
             tx.value = U256::from(0);
         })
-        .append_handler_register(handle_register)
+        .append_handler_register(handle_register_riscv)
         .build();
     evm.cfg_mut().limit_contract_code_size = Some(usize::MAX);
 
@@ -40,7 +48,7 @@ pub fn deploy_contract(db: &mut InMemoryDB, bytecode: Bytes) -> Address {
     }
 }
 
-pub fn run_tx(db: &mut InMemoryDB, addr: &Address, calldata: Vec<u8>) {
+pub fn run_tx_prolog(db: &mut InMemoryDB, addr: &Address, calldata: Vec<u8>) {
     let mut evm = Evm::builder()
         .with_db(db)
         .modify_tx_env(|tx| {
@@ -49,7 +57,7 @@ pub fn run_tx(db: &mut InMemoryDB, addr: &Address, calldata: Vec<u8>) {
             tx.data = calldata.into();
             tx.value = U256::from(0);
         })
-        .append_handler_register(handle_register)
+        .append_handler_register(handle_register_prolog)
         .build();
 
     let result = evm.transact_commit().unwrap();
@@ -61,6 +69,229 @@ pub fn run_tx(db: &mut InMemoryDB, addr: &Address, calldata: Vec<u8>) {
         } => println!("Tx result: {:?}", value),
         result => panic!("Unexpected result: {:?}", result),
     };
+}
+
+pub fn run_tx(db: &mut InMemoryDB, addr: &Address, calldata: Vec<u8>) {
+    let mut evm = Evm::builder()
+        .with_db(db)
+        .modify_tx_env(|tx| {
+            tx.caller = address!("0000000000000000000000000000000000000007");
+            tx.transact_to = TransactTo::Call(*addr);
+            tx.data = calldata.into();
+            tx.value = U256::from(0);
+        })
+        .append_handler_register(handle_register_riscv)
+        .build();
+
+    let result = evm.transact_commit().unwrap();
+
+    match result {
+        ExecutionResult::Success {
+            output: Output::Call(value),
+            ..
+        } => println!("Tx result: {:?}", value),
+        result => panic!("Unexpected result: {:?}", result),
+    };
+}
+
+#[derive(Debug, Clone, Default)]
+struct Prolog {
+    program: String,
+    calldata: String,
+}
+
+impl Prolog {
+    pub fn new(program: &[u8], calldata: &[u8]) -> Self {
+        let program = String::from_utf8_lossy(program).to_string();
+        let program: String = program.chars().filter(|&c| c != '\0').collect();
+        let calldata = String::from_utf8_lossy(calldata).to_string();
+        Self { program, calldata }
+    }
+}
+
+#[derive(Debug, Clone, Default)]
+struct PrologEmu {
+    emu: Prolog,
+    _returned_data_destiny: Option<Range<u64>>,
+}
+
+fn prolog_context(frame: &Frame) -> Option<PrologEmu> {
+    let interpreter = frame.interpreter();
+
+    let Some((0xF7, bytecode)) = interpreter.bytecode.split_first() else {
+        return None;
+    };
+    let emu = Prolog::new(bytecode, &interpreter.contract.input);
+    Some(PrologEmu {
+        emu,
+        _returned_data_destiny: None,
+    })
+}
+
+fn invoke_scryer_prolog(program: String, calldata: String) {
+    let module = include_bytes!("../eth.pl");
+    let module = String::from_utf8_lossy(module).to_string();
+
+    let goal = format!("main({calldata}, S, R).");
+    let full_program = format!("\n% module\n{module}\n% end module\n{program}\n% end program\n");
+    //println!("Prolog Program:\n{full_program}\nEnd Program");
+
+    let mut temp_file = NamedTempFile::new().expect("Failed to create temporary file");
+    temp_file
+        .write_all(full_program.as_bytes())
+        .expect("Failed to write Prolog program to file");
+
+    let temp_file_path = temp_file.path();
+
+    let _output = Command::new("scryer-prolog")
+        .arg(temp_file_path)
+        .arg("--goal")
+        .arg(goal)
+        .output()
+        .expect("Failed to execute Scryer Prolog");
+
+    /*
+    if output.status.success() {
+        println!(
+            "Prolog Output:\n{}",
+            String::from_utf8_lossy(&output.stdout)
+        );
+    } else {
+        eprintln!(
+            "Prolog Error:\n{}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+    }
+    */
+}
+use tokio::sync::Notify;
+async fn start_prolog_host(
+    interpreter: &mut Interpreter,
+    host: &mut dyn Host,
+    notify: Arc<Notify>,
+) -> InterpreterAction {
+    let hostname = "127.0.0.1";
+    let port = 12345;
+    let address = format!("{hostname}:{port}");
+
+    let listener = TcpListener::bind(&address).await.expect("Failed to bind");
+    //println!("[INFO] Server listening on {address}");
+
+    notify.notify_one();
+
+    loop {
+        let (socket, addr) = listener
+            .accept()
+            .await
+            .expect("Failed to accept connection");
+
+        //println!("[INFO] Connection established with {addr}");
+        let res = handle_client(socket, interpreter, host).await;
+        match res {
+            Ok(res) => {
+                if !res.is_empty() {
+                    return InterpreterAction::Return {
+                        result: InterpreterResult {
+                            result: InstructionResult::Return,
+                            output: res.into(),
+                            gas: interpreter.gas, // FIXME: gas is not correct
+                        },
+                    };
+                }
+            }
+            Err(e) => {
+                panic!("[ERROR] Error handling client {addr}: {e}");
+            }
+        }
+    }
+}
+
+async fn execute_prolog(prolog_emu: &mut PrologEmu, notify: Arc<Notify>) {
+    notify.notified().await;
+    let emu = &mut prolog_emu.emu;
+
+    use std::thread;
+
+    let program_arc = Arc::new(emu.program.clone());
+    let cd_arc = Arc::new(emu.calldata.clone());
+    let handle = thread::spawn({
+        move || {
+            invoke_scryer_prolog((*program_arc).clone(), (*cd_arc).clone());
+        }
+    });
+
+    handle.join().expect("Thread panicked");
+}
+
+async fn handle_client(
+    socket: TcpStream,
+    interpreter: &mut Interpreter,
+    host: &mut dyn Host,
+) -> Result<Vec<u8>, Box<dyn std::error::Error>> {
+    let (reader, mut writer) = socket.into_split();
+    let mut reader = BufReader::new(reader);
+
+    let mut buffer = String::new();
+
+    let mut result = Vec::new();
+    loop {
+        buffer.clear();
+        let bytes_read = reader.read_line(&mut buffer).await?;
+        if bytes_read == 0 {
+            break;
+        }
+
+        let command = buffer.trim();
+        let parts: Vec<&str> = command.split_whitespace().collect();
+
+        if parts.is_empty() {
+            writer.write_all(b"error.\n").await?;
+            continue;
+        }
+
+        match parts[0] {
+            "stop" => {
+                break;
+            }
+            "sload" if parts.len() == 2 => {
+                let key: u32 = parts[1].parse().unwrap_or(0);
+                //println!("sload({key})");
+                match host.sload(interpreter.contract.target_address, U256::from(key)) {
+                    Some((value, _is_cold)) => {
+                        writer
+                            .write_all(format!("value({value}).\n").as_bytes())
+                            .await?;
+                    }
+                    _ => {
+                        //return return_revert(interpreter);
+                    }
+                }
+            }
+            "sstore" if parts.len() == 3 => {
+                let key: u32 = parts[1].parse().unwrap_or(0);
+                let value: u32 = parts[2].parse().unwrap_or(0);
+                //println!("sstore({key}, {value})");
+                host.sstore(
+                    interpreter.contract.target_address,
+                    U256::from(key),
+                    U256::from(value),
+                );
+                writer.write_all(b"ok.\n").await?;
+            }
+            "return" if parts.len() == 2 => {
+                let res: u32 = parts[1].parse().unwrap_or(0);
+                result.extend(res.to_be_bytes());
+
+                //println!("return({res})");
+                writer.write_all(b"ok.\n").await?;
+            }
+            _ => {
+                writer.write_all(b"error.\n").await?;
+            }
+        }
+    }
+
+    Ok(result)
 }
 
 #[derive(Debug)]
@@ -82,7 +313,52 @@ fn riscv_context(frame: &Frame) -> Option<RVEmu> {
     })
 }
 
-pub fn handle_register<EXT, DB: Database>(handler: &mut EvmHandler<'_, EXT, DB>) {
+pub fn handle_register_prolog<EXT, DB: Database>(handler: &mut EvmHandler<'_, EXT, DB>) {
+    let call_stack = Rc::<RefCell<Vec<_>>>::new(RefCell::new(Vec::new()));
+
+    // create a prolog context on call frame.
+    let call_stack_inner = call_stack.clone();
+    let old_handle = handler.execution.call.clone();
+    handler.execution.call = Arc::new(move |ctx, inputs| {
+        let result = old_handle(ctx, inputs);
+        if let Ok(FrameOrResult::Frame(frame)) = &result {
+            call_stack_inner.borrow_mut().push(prolog_context(frame));
+        }
+        result
+    });
+
+    // create a prolog context on create frame.
+    let call_stack_inner = call_stack.clone();
+    let old_handle = handler.execution.create.clone();
+    handler.execution.create = Arc::new(move |ctx, inputs| {
+        let result = old_handle(ctx, inputs);
+        if let Ok(FrameOrResult::Frame(frame)) = &result {
+            call_stack_inner.borrow_mut().push(prolog_context(frame));
+        }
+        result
+    });
+
+    handler.execution.execute_frame = Arc::new(move |frame, _memory, _instruction_table, ctx| {
+        let call_stack = Rc::clone(&call_stack);
+        let runtime = tokio::runtime::Runtime::new().expect("Failed to create Tokio runtime");
+        Ok(runtime.block_on(async move {
+            let notify = Arc::new(Notify::new());
+            let notify_clone = Arc::clone(&notify);
+            if let Some(Some(prolog_context)) = call_stack.borrow_mut().first_mut() {
+                let mut p = prolog_context.clone();
+                tokio::spawn(async move {
+                    execute_prolog(&mut p, notify_clone).await;
+                });
+            } else {
+                panic!()
+            }
+            let host = start_prolog_host(frame.interpreter_mut(), ctx, notify);
+            host.await
+        }))
+    });
+}
+
+pub fn handle_register_riscv<EXT, DB: Database>(handler: &mut EvmHandler<'_, EXT, DB>) {
     let call_stack = Rc::<RefCell<Vec<_>>>::new(RefCell::new(Vec::new()));
 
     // create a riscv context on call frame.

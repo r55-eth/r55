@@ -1,5 +1,5 @@
 mod exec;
-use exec::{deploy_contract, run_tx};
+use exec::{deploy_contract, run_tx, run_tx_prolog};
 
 use std::fs::File;
 use std::io::Read;
@@ -114,6 +114,62 @@ fn add_contract_to_db(db: &mut InMemoryDB, addr: Address, bytecode: Bytes) {
     db.insert_account_info(addr, account);
 }
 
+fn test_prolog_contract() {
+    println!("\n\n============ Running Prolog tests ============\n\n");
+    let prolog_bytes = include_bytes!("../erc20.pl");
+
+    const CONTRACT_ADDR: Address = address!("0d4a11d5EEaaC28EC3F61d100daF4d40471f1852");
+    let mut db = InMemoryDB::default();
+
+    let mut bytecode = vec![0xf7];
+    bytecode.extend_from_slice(prolog_bytes);
+
+    let bytecode = Bytes::from(bytecode);
+
+    add_contract_to_db(&mut db, CONTRACT_ADDR, bytecode);
+
+    let from: u64 = 0xcafebeef;
+    let to: u64 = 0xdeadbeef;
+    let value_mint: u64 = 42;
+    let value_transfer: u64 = 7;
+
+    let calldata_balance_from = format!("balanceOf({from})");
+    let calldata_balance_to = format!("balanceOf({to})");
+    let calldata_mint = format!("mint({from}, {value_mint})");
+    let calldata_transfer = format!("transfer({from}, {to}, {value_transfer})");
+
+    println!("=== Balance of address {from}:");
+    run_tx_prolog(
+        &mut db,
+        &CONTRACT_ADDR,
+        calldata_balance_from.clone().into(),
+    );
+    println!("=== Minting {value_mint} tokens to address {from}:");
+    run_tx_prolog(&mut db, &CONTRACT_ADDR, calldata_mint.clone().into());
+    println!("=== Balance of address {from}:");
+    run_tx_prolog(
+        &mut db,
+        &CONTRACT_ADDR,
+        calldata_balance_from.clone().into(),
+    );
+    println!("=== Transfer {value_transfer} from {from} to {to}:");
+    run_tx_prolog(&mut db, &CONTRACT_ADDR, calldata_transfer.clone().into());
+    println!("=== Balance of address {from}:");
+    run_tx_prolog(
+        &mut db,
+        &CONTRACT_ADDR,
+        calldata_balance_from.clone().into(),
+    );
+    println!("=== Balance of address {to}:");
+    run_tx_prolog(&mut db, &CONTRACT_ADDR, calldata_balance_to.clone().into());
+
+    /*
+    let account_db = &evm.db().accounts[&CONTRACT_ADDR];
+    println!("Account storage: {:?}", account_db.storage);
+    let slot_42 = account_db.storage[&U256::from(42)];
+    assert_eq!(slot_42.as_limbs()[0], 0xdeadbeef);
+    */
+}
 fn test_runtime_from_binary() {
     let rv_bytecode = compile_runtime("erc20").unwrap();
 
@@ -186,4 +242,5 @@ fn test_deploy() {
 fn main() {
     test_runtime_from_binary();
     test_deploy();
+    test_prolog_contract();
 }
