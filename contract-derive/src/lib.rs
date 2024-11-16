@@ -87,11 +87,111 @@ pub fn contract(_attr: TokenStream, item: TokenStream) -> TokenStream {
         }
     }).collect();
 
+    let emit_helper = quote! {
+        #[macro_export]
+        macro_rules! emit {
+            ($event_name:expr, $($arg:expr),*) => {{
+                use alloy_sol_types::SolValue;
+                use alloy_core::primitives::{keccak256, B256, U256, I256};
+                use alloc::vec::Vec;
+                use alloc::string::String;
+                use alloc::borrow::ToOwned;
+                
+                let mut signature = alloc::vec![];
+                signature.extend_from_slice($event_name.as_bytes());
+                signature.extend_from_slice(b"(");
+                
+                let mut first = true;
+                $(
+                    if !first {
+                        signature.extend_from_slice(b",");
+                    }
+                    first = false;
+                    
+                    signature.extend_from_slice(match stringify!($arg) {
+                        // Address
+                        s if s.contains("Address") || s.contains("address") => b"address",
+                        
+                        // Unsigned integers
+                        s if s.contains("u8") => b"uint8",
+                        s if s.contains("u16") => b"uint16",
+                        s if s.contains("u32") => b"uint32",
+                        s if s.contains("u64") => b"uint64",
+                        s if s.contains("u128") => b"uint128",
+                        s if s.contains("U256") || s.contains("uint256") => b"uint256",
+                        
+                        // Signed integers
+                        s if s.contains("i8") => b"int8",
+                        s if s.contains("i16") => b"int16",
+                        s if s.contains("i32") => b"int32",
+                        s if s.contains("i64") => b"int64",
+                        s if s.contains("i128") => b"int128",
+                        s if s.contains("I256") || s.contains("int256") => b"int256",
+                        
+                        // Boolean
+                        s if s.contains("bool") => b"bool",
+                        
+                        // Bytes y FixedBytes
+                        s if s.contains("B256") => b"bytes32",
+                        s if s.contains("[u8; 32]") => b"bytes32",
+                        s if s.contains("[u8; 20]") => b"bytes20",
+                        s if s.contains("[u8; 16]") => b"bytes16",
+                        s if s.contains("[u8; 8]") => b"bytes8",
+                        s if s.contains("[u8; 4]") => b"bytes4",
+                        s if s.contains("[u8; 1]") => b"bytes1",
+                        
+                        // Dynamic bytes & strings
+                        s if s.contains("Vec<u8>") => b"bytes",
+                        s if s.contains("String") || s.contains("str") => b"string",
+                        
+                        // Dynamic arrays
+                        s if s.contains("Vec<Address>") => b"address[]",
+                        s if s.contains("Vec<U256>") => b"uint256[]",
+                        s if s.contains("Vec<bool>") => b"bool[]",
+                        s if s.contains("Vec<B256>") => b"bytes32[]",
+                        
+                        // Ztatic arrays
+                        s if s.contains("[Address; ") => b"address[]",
+                        s if s.contains("[U256; ") => b"uint256[]",
+                        s if s.contains("[bool; ") => b"bool[]",
+                        s if s.contains("[B256; ") => b"bytes32[]",
+                        // Tuples
+                        s if s.contains("(Address, U256)") => b"(address,uint256)",
+                        s if s.contains("(U256, bool)") => b"(uint256,bool)",
+                        s if s.contains("(Address, Address)") => b"(address,address)",
+                        
+                        _ => b"uint64",
+                    });
+                )*
+                
+                signature.extend_from_slice(b")");
+                
+                let topic0 = B256::from(keccak256(&signature));
+                let mut topics = alloc::vec![topic0];
+                
+                $(
+                    let encoded = $arg.abi_encode();
+                    if topics.len() < 3 {
+                        topics.push(B256::from_slice(&encoded));
+                    } else {
+                        eth_riscv_runtime::emit_log(&encoded, &topics);
+                    }
+                )*
+                
+                if topics.len() > 1 {
+                    let data = topics.pop().unwrap();
+                    eth_riscv_runtime::emit_log(data.as_ref(), &topics);
+                }
+            }};
+        }
+    };
+
     // Generate the call method implementation
     let call_method = quote! {
         use alloy_sol_types::SolValue;
         use eth_riscv_runtime::*;
 
+        #emit_helper
         impl Contract for #struct_name {
             fn call(&self) {
                 self.call_with_data(&msg_data());

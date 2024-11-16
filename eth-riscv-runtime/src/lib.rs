@@ -12,6 +12,9 @@ mod alloc;
 pub mod types;
 pub mod block;
 
+mod log;
+pub use log::emit_log;
+
 const CALLDATA_ADDRESS: usize = 0x8000_0000;
 
 pub trait Contract {
@@ -139,6 +142,19 @@ pub fn msg_data() -> &'static [u8] {
     let length = unsafe { slice_from_raw_parts(CALLDATA_ADDRESS, 8) };
     let length = u64::from_le_bytes([length[0], length[1], length[2], length[3], length[4], length[5], length[6], length[7]]) as usize;
     unsafe { slice_from_raw_parts(CALLDATA_ADDRESS + 8, length) }
+}
+
+pub fn log(data_ptr: u64, data_size: u64, topics_ptr: u64, topics_size: u64) {
+    unsafe {
+        asm!(
+            "ecall",
+            in("a0") data_ptr,
+            in("a1") data_size,
+            in("a2") topics_ptr,
+            in("a3") topics_size,
+            in("t0") u8::from(Syscall::Log)
+        );
+    }
 }
 
 #[allow(non_snake_case)]

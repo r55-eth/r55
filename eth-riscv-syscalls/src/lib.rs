@@ -71,4 +71,5 @@ syscalls!(
     (0xf1, Call, "call"),
     (0xf3, Return, "return"),
     (0xfd, Revert, "revert"),
+    (0xA0, Log, "log"),
 );
