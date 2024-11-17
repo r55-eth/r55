@@ -31,7 +31,7 @@ impl ERC20 {
         self.balance.write(from, from_balance - value);
         self.balance.write(to, to_balance + value);
 
-        emit!("Transfer", from, to, value);
+        emit!("Transfer", idx from, idx to, value);
         true
     }
 
@@ -44,7 +44,7 @@ impl ERC20 {
 
         let to_balance = self.balance.read(to);
         self.balance.write(to, to_balance + value);
-        emit!("Mint", to, value);
+        emit!("Mint", idx to, value);
         true
     }
 
@@ -55,7 +55,7 @@ impl ERC20 {
         }
         
         self.balance.write(from, from_balance - value);
-        emit!("Burn", value);
+        emit!("Burn", idx from, value);
         true
     }
 
