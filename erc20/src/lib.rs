@@ -13,49 +13,66 @@ use alloc::string::String;
 
 #[derive(Default)]
 pub struct ERC20 {
-    balance: Mapping<Address, u64>,
-    allowances: Mapping<Address, Mapping<Address, u64>>,
+    balances: Mapping<Address, u64>,
+    allowances: Mapping<Address, u64>,
     total_supply: u64,
     name: String,
     symbol: String,
+    decimals: u8,
 }
 
 #[contract]
 impl ERC20 {
     pub fn balance_of(&self, owner: Address) -> u64 {
-        self.balance.read(owner)
+        self.balances.read(owner)
     }
 
-    pub fn transfer(&self, from: Address, to: Address, value: u64) {
-        let from_balance = self.balance.read(from);
-        let to_balance = self.balance.read(to);
+    pub fn transfer(&self, to: Address, value: u64) -> bool {
+        let from_balance = self.balances.read(msg_sender());
+        let to_balance = self.balances.read(to);
 
-        if from == to || from_balance < value {
-            revert();
-        }
+        self.balances.write(msg_sender(), from_balance - value);
+        self.balances.write(to, to_balance + value);
 
-        self.balance.write(from, from_balance - value);
-        self.balance.write(to, to_balance + value);
+        true
     }
 
-    #[payable]
+    pub fn approve(&self, spender: Address, value: u64) -> bool {
+        // let spender_allowances = self.allowances.read(msg_sender());
+        // spender_allowances.write(spender, value);
+        true
+    }
+
+    pub fn transfer_from(&self, sender: Address, recipient: Address, amount: u64) -> bool {
+        // let allowance = self.allowances.read(sender).read(msg_sender());
+        let sender_balance = self.balances.read(sender);
+        let recipient_balance = self.balances.read(recipient);
+
+        // self.allowances.write(sender, msg_sender(), allowance - amount);
+        self.balances.write(sender, sender_balance - amount);
+        self.balances.write(recipient, recipient_balance + amount);
+
+        true
+    }
+
+    pub fn total_supply(&self) -> u64 {
+        self.total_supply
+    }
+
+    pub fn allowance(&self, owner: Address, spender: Address) -> u64 {
+        // self.allowances.read(owner).read(spender)
+        1
+    }
+
     pub fn mint(&self, to: Address, value: u64) {
         let owner = msg_sender();
         if owner != address!("0000000000000000000000000000000000000007") {
             revert();
         }
 
-        let to_balance = self.balance.read(to);
-        self.balance.write(to, to_balance + value);
+        let to_balance = self.balances.read(to);
+        self.balances.write(to, to_balance + value);
+        self.balances.read(to);
     }
 
-    // Returns the name of the token.
-    pub fn name(&self) -> String {
-        self.name.clone()
-    }
-
-    // Returns the symbol of the token, usually a shorter version of the name.
-    pub fn symbol(&self) -> String {
-        self.symbol.clone()
-    }
 }
