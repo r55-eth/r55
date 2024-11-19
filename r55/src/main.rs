@@ -132,24 +132,50 @@ fn test_runtime_from_binary() -> eyre::Result<()> {
 
     let selector_balance = &keccak256("balance_of")[0..4];
     let selector_mint = &keccak256("mint")[0..4];
-    let to: Address = address!("0000000000000000000000000000000000000007");
+    let selector_transfer = &keccak256("transfer")[0..4];
+    let selector_approve = &keccak256("approve")[0..4];
+    let selector_allowance = &keccak256("allowance")[0..4];
+    let alice: Address = address!("0000000000000000000000000000000000000001");
+    let bob: Address = address!("0000000000000000000000000000000000000002");
+    let carol: Address = address!("0000000000000000000000000000000000000003");
     let value_mint: u64 = 42;
-    let mut calldata_balance = to.abi_encode();
-    let mut calldata_mint = (to, value_mint).abi_encode();
+    let value_transfer: u64 = 21;
+    let mut calldata_balance = alice.abi_encode();
+    let mut calldata_mint = (alice, value_mint).abi_encode();
+    let mut calldata_transfer = (bob, value_transfer).abi_encode();
+    let mut calldata_approve = (carol, value_transfer).abi_encode();
+    let mut calldata_allowance = (alice, carol).abi_encode();
 
-    add_balance_to_db(&mut db, to, 1e18 as u64);
+    add_balance_to_db(&mut db, alice, 1e18 as u64);
 
     let mut complete_calldata_balance = selector_balance.to_vec();
     complete_calldata_balance.append(&mut calldata_balance);
 
     let mut complete_calldata_mint = selector_mint.to_vec();
     complete_calldata_mint.append(&mut calldata_mint);
+    let mut complete_calldata_transfer = selector_transfer.to_vec();
+    complete_calldata_transfer.append(&mut calldata_transfer);
 
+    let mut complete_calldata_approve = selector_approve.to_vec();
+    complete_calldata_approve.append(&mut calldata_approve);
+
+    let mut complete_calldata_allowance = selector_allowance.to_vec();
+    complete_calldata_allowance.append(&mut calldata_allowance);
+
+    // Mint 42 tokens to Alice
     run_tx(&mut db, &CONTRACT_ADDR, complete_calldata_mint.clone())?;
+    // Check Alice's balance
     run_tx(&mut db, &CONTRACT_ADDR, complete_calldata_balance.clone())?;
+    // Transfer 21 tokens from Alice to Bob
+    run_tx(&mut db, &CONTRACT_ADDR, complete_calldata_transfer.clone())?;
+    // Check Alice's balance
+    run_tx(&mut db, &CONTRACT_ADDR, complete_calldata_balance.clone())?;
+    // Approve Carol to spend 21 token from Alice
+    run_tx(&mut db, &CONTRACT_ADDR, complete_calldata_approve.clone())?;
+    // Check Carol's allowance
+    run_tx(&mut db, &CONTRACT_ADDR, complete_calldata_allowance.clone())?;
 
     Ok(())
-
     /*
     let account_db = &evm.db().accounts[&CONTRACT_ADDR];
     println!("Account storage: {:?}", account_db.storage);
@@ -161,12 +187,12 @@ fn test_runtime_from_binary() -> eyre::Result<()> {
 fn test_runtime(addr: &Address, db: &mut InMemoryDB) -> Result<()> {
     let selector_balance = &keccak256("balance_of")[0..4];
     let selector_mint = &keccak256("mint")[0..4];
-    let to: Address = address!("0000000000000000000000000000000000000007");
+    let alice: Address = address!("0000000000000000000000000000000000000001");
     let value_mint: u64 = 42;
-    let mut calldata_balance = to.abi_encode();
-    let mut calldata_mint = (to, value_mint).abi_encode();
+    let mut calldata_balance = alice.abi_encode();
+    let mut calldata_mint = (alice, value_mint).abi_encode();
 
-    add_balance_to_db(db, to, 1e18 as u64);
+    add_balance_to_db(db, alice, 1e18 as u64);
 
     let mut complete_calldata_balance = selector_balance.to_vec();
     complete_calldata_balance.append(&mut calldata_balance);

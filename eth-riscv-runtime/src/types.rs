@@ -3,8 +3,7 @@ use core::marker::PhantomData;
 
 use crate::*;
 
-use alloy_core::primitives::Address;
-use alloy_sol_types::{abi::Decoder, SolType, SolValue};
+use alloy_sol_types::{SolType, SolValue};
 
 extern crate alloc;
 use alloc::vec::Vec;
@@ -16,13 +15,47 @@ pub struct Mapping<K, V> {
     pd: PhantomData<(K, V)>,
 }
 
-impl<
-        K: SolValue,
-        V: SolValue + core::convert::From<<<V as SolValue>::SolType as SolType>::RustType> + ?Sized,
-    > Mapping<K, V>
+/// A trait for types that can be read from and written to storage slots
+pub trait SlotStorable {
+    fn read_from_storage(key: u64) -> Self;
+    fn write_to_storage(&self, key: u64);
+}
+
+impl<V> SlotStorable for V
+where
+    V: SolValue + core::convert::From<<<V as SolValue>::SolType as SolType>::RustType>,
 {
+    fn read_from_storage(encoded_key: u64) -> Self {
+        let bytes: [u8; 32] = sload(encoded_key).to_be_bytes();
+        Self::abi_decode(&bytes, false).unwrap_or_else(|_| revert())
+    }
+
+    fn write_to_storage(&self, key: u64) {
+        let bytes = self.abi_encode();
+        let mut padded = [0u8; 32];
+        padded[..bytes.len()].copy_from_slice(&bytes);
+        sstore(key, U256::from_be_bytes(padded));
+    }
+}
+
+impl<K: SolValue, V: SlotStorable> SlotStorable for Mapping<K, V> {
+    fn read_from_storage(encoded_key: u64) -> Self {
+        Self {
+            id: encoded_key,
+            pd: PhantomData,
+        }
+    }
+
+    fn write_to_storage(&self, _key: u64) {
+        // Mapping types can not directly be written to a storage slot
+        // Instead the elements they contain, need to be individually written to their own slots
+        revert();
+    }
+}
+
+impl<K: SolValue, V: SlotStorable> Mapping<K, V> {
     pub fn encode_key(&self, key: K) -> u64 {
-        let key_bytes = key.abi_encode(); // Is this padded?
+        let key_bytes = key.abi_encode();
         let id_bytes = self.id.to_le_bytes();
 
         // Concatenate the key bytes and id bytes
@@ -41,16 +74,10 @@ impl<
     }
 
     pub fn read(&self, key: K) -> V {
-        let bytes: [u8; 32] = sload(self.encode_key(key)).to_be_bytes();
-        V::abi_decode(&bytes, false).unwrap()
+        V::read_from_storage(self.encode_key(key))
     }
 
     pub fn write(&self, key: K, value: V) {
-        let bytes = value.abi_encode();
-        let mut padded = [0u8; 32];
-        padded[..bytes.len()].copy_from_slice(&bytes);
-        sstore(self.encode_key(key), U256::from_be_bytes(padded));
+        value.write_to_storage(self.encode_key(key));
     }
 }
-
-
