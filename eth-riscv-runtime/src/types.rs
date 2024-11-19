@@ -1,9 +1,10 @@
-use core::marker::PhantomData;
 use core::default::Default;
+use core::marker::PhantomData;
 
 use crate::*;
 
 use alloy_core::primitives::Address;
+use alloy_sol_types::{abi::Decoder, SolType, SolValue};
 
 extern crate alloc;
 use alloc::vec::Vec;
@@ -12,12 +13,16 @@ use alloc::vec::Vec;
 #[derive(Default)]
 pub struct Mapping<K, V> {
     id: u64,
-    pd: PhantomData<(K, V)>
+    pd: PhantomData<(K, V)>,
 }
 
-impl<K: ToBytes, V: Into<u64> + From<u64>> Mapping<K, V> {
+impl<
+        K: SolValue,
+        V: SolValue + core::convert::From<<<V as SolValue>::SolType as SolType>::RustType> + ?Sized,
+    > Mapping<K, V>
+{
     pub fn encode_key(&self, key: K) -> u64 {
-        let key_bytes = key.to_bytes();
+        let key_bytes = key.abi_encode(); // Is this padded?
         let id_bytes = self.id.to_le_bytes();
 
         // Concatenate the key bytes and id bytes
@@ -36,20 +41,16 @@ impl<K: ToBytes, V: Into<u64> + From<u64>> Mapping<K, V> {
     }
 
     pub fn read(&self, key: K) -> V {
-        sload(self.encode_key(key)).into()
+        let bytes: [u8; 32] = sload(self.encode_key(key)).to_be_bytes();
+        V::abi_decode(&bytes, false).unwrap()
     }
 
     pub fn write(&self, key: K, value: V) {
-        sstore(self.encode_key(key), value.into());
+        let bytes = value.abi_encode();
+        let mut padded = [0u8; 32];
+        padded[..bytes.len()].copy_from_slice(&bytes);
+        sstore(self.encode_key(key), U256::from_be_bytes(padded));
     }
 }
 
-pub trait ToBytes {
-    fn to_bytes(&self) -> Vec<u8>;
-}
 
-impl ToBytes for Address {
-    fn to_bytes(&self) -> Vec<u8> {
-        self.0.to_vec()
-    }
-}
