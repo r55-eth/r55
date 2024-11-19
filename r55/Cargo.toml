@@ -9,7 +9,6 @@ repository.workspace = true
 eth-riscv-interpreter.workspace = true
 eth-riscv-syscalls.workspace = true
 
-#revm = { git = "https://github.com/r0qs/revm" }
 revm = { version = "9.0.0", features = ["std"] }
 rvemu = { git = "https://github.com/lvella/rvemu.git" }
 
