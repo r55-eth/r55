@@ -10,7 +10,7 @@ use std::process::Command;
 
 use alloy_sol_types::SolValue;
 use revm::{
-    primitives::{address, keccak256, ruint::Uint, AccountInfo, Address, Bytecode, Bytes},
+    primitives::{address, keccak256, ruint::Uint, AccountInfo, Address, Bytecode, Bytes, U256},
     InMemoryDB,
 };
 
@@ -113,6 +113,10 @@ fn add_contract_to_db(db: &mut InMemoryDB, addr: Address, bytecode: Bytes) {
     db.insert_account_info(addr, account);
 }
 
+fn add_balance_to_db(db: &mut InMemoryDB, addr: Address, value: u64) {
+    db.insert_account_info(addr, AccountInfo::from_balance(U256::from(value)));
+}
+
 fn test_runtime_from_binary() -> eyre::Result<()> {
     let rv_bytecode = compile_runtime("erc20")?;
 
@@ -128,10 +132,12 @@ fn test_runtime_from_binary() -> eyre::Result<()> {
 
     let selector_balance = &keccak256("balance_of")[0..4];
     let selector_mint = &keccak256("mint")[0..4];
-    let to: Address = address!("0000000000000000000000000000000000000001");
+    let to: Address = address!("0000000000000000000000000000000000000007");
     let value_mint: u64 = 42;
     let mut calldata_balance = to.abi_encode();
     let mut calldata_mint = (to, value_mint).abi_encode();
+
+    add_balance_to_db(&mut db, to, 1e18 as u64);
 
     let mut complete_calldata_balance = selector_balance.to_vec();
     complete_calldata_balance.append(&mut calldata_balance);
@@ -155,10 +161,12 @@ fn test_runtime_from_binary() -> eyre::Result<()> {
 fn test_runtime(addr: &Address, db: &mut InMemoryDB) -> Result<()> {
     let selector_balance = &keccak256("balance_of")[0..4];
     let selector_mint = &keccak256("mint")[0..4];
-    let to: Address = address!("0000000000000000000000000000000000000001");
+    let to: Address = address!("0000000000000000000000000000000000000007");
     let value_mint: u64 = 42;
     let mut calldata_balance = to.abi_encode();
     let mut calldata_mint = (to, value_mint).abi_encode();
+
+    add_balance_to_db(db, to, 1e18 as u64);
 
     let mut complete_calldata_balance = selector_balance.to_vec();
     complete_calldata_balance.append(&mut calldata_balance);

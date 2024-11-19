@@ -51,6 +51,8 @@ pub fn run_tx(db: &mut InMemoryDB, addr: &Address, calldata: Vec<u8>) -> Result<
             tx.transact_to = TransactTo::Call(*addr);
             tx.data = calldata.into();
             tx.value = U256::from(0);
+            tx.gas_price = U256::from(42);
+            tx.gas_limit = 100_000;
         })
         .append_handler_register(handle_register)
         .build();
@@ -293,6 +295,68 @@ fn execute_riscv(
                         emu.cpu.xregs.write(11, limbs[1]);
                         emu.cpu.xregs.write(12, limbs[2]);
                         emu.cpu.xregs.write(13, limbs[3]);
+                    }
+                    Syscall::BaseFee => {
+                        let value = host.env().block.basefee;
+                        let limbs = value.as_limbs();
+                        emu.cpu.xregs.write(10, limbs[0]);
+                        emu.cpu.xregs.write(11, limbs[1]);
+                        emu.cpu.xregs.write(12, limbs[2]);
+                        emu.cpu.xregs.write(13, limbs[3]);
+                    }
+                    Syscall::ChainId => {
+                        let value = host.env().cfg.chain_id;
+                        emu.cpu.xregs.write(10, value);
+                    }
+                    Syscall::GasLimit => {
+                        let limit = host.env().block.gas_limit;
+                        let limbs = limit.as_limbs();
+                        emu.cpu.xregs.write(10, limbs[0]);
+                        emu.cpu.xregs.write(11, limbs[1]);
+                        emu.cpu.xregs.write(12, limbs[2]);
+                        emu.cpu.xregs.write(13, limbs[3]);
+                    }
+                    Syscall::Number => {
+                        let number = host.env().block.number;
+                        let limbs = number.as_limbs();
+                        emu.cpu.xregs.write(10, limbs[0]);
+                        emu.cpu.xregs.write(11, limbs[1]);
+                        emu.cpu.xregs.write(12, limbs[2]);
+                        emu.cpu.xregs.write(13, limbs[3]);
+                    }
+                    Syscall::Timestamp => {
+                        let timestamp = host.env().block.timestamp;
+                        let limbs = timestamp.as_limbs();
+                        emu.cpu.xregs.write(10, limbs[0]);
+                        emu.cpu.xregs.write(11, limbs[1]);
+                        emu.cpu.xregs.write(12, limbs[2]);
+                        emu.cpu.xregs.write(13, limbs[3]);
+                    }
+                    Syscall::GasPrice => {
+                        let value = host.env().tx.gas_price;
+                        let limbs = value.as_limbs();
+                        emu.cpu.xregs.write(10, limbs[0]);
+                        emu.cpu.xregs.write(11, limbs[1]);
+                        emu.cpu.xregs.write(12, limbs[2]);
+                        emu.cpu.xregs.write(13, limbs[3]);
+                    }
+                    Syscall::Origin => {
+                        // Syscall::Origin
+                        let origin = host.env().tx.caller;
+                        // Break address into 3 u64s and write to registers
+                        let origin_bytes = origin.as_slice();
+
+                        let first_u64 = u64::from_be_bytes(origin_bytes[0..8].try_into().unwrap());
+                        emu.cpu.xregs.write(10, first_u64);
+
+                        let second_u64 =
+                            u64::from_be_bytes(origin_bytes[8..16].try_into().unwrap());
+                        emu.cpu.xregs.write(11, second_u64);
+
+                        let mut padded_bytes = [0u8; 8];
+                        padded_bytes[..4].copy_from_slice(&origin_bytes[16..20]);
+                        let third_u64 = u64::from_be_bytes(padded_bytes);
+                        emu.cpu.xregs.write(12, third_u64);
                     }
                 }
             }
