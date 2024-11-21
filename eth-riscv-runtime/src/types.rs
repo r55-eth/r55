@@ -16,21 +16,21 @@ pub struct Mapping<K, V> {
 }
 
 /// A trait for types that can be read from and written to storage slots
-pub trait SlotStorable {
-    fn read_from_storage(key: u64) -> Self;
-    fn write_to_storage(&self, key: u64);
+pub trait StorageStorable {
+    fn read(key: u64) -> Self;
+    fn write(&self, key: u64);
 }
 
-impl<V> SlotStorable for V
+impl<V> StorageStorable for V
 where
     V: SolValue + core::convert::From<<<V as SolValue>::SolType as SolType>::RustType>,
 {
-    fn read_from_storage(encoded_key: u64) -> Self {
+    fn read(encoded_key: u64) -> Self {
         let bytes: [u8; 32] = sload(encoded_key).to_be_bytes();
         Self::abi_decode(&bytes, false).unwrap_or_else(|_| revert())
     }
 
-    fn write_to_storage(&self, key: u64) {
+    fn write(&self, key: u64) {
         let bytes = self.abi_encode();
         let mut padded = [0u8; 32];
         padded[..bytes.len()].copy_from_slice(&bytes);
@@ -38,22 +38,22 @@ where
     }
 }
 
-impl<K: SolValue, V: SlotStorable> SlotStorable for Mapping<K, V> {
-    fn read_from_storage(encoded_key: u64) -> Self {
+impl<K: SolValue, V: StorageStorable> StorageStorable for Mapping<K, V> {
+    fn read(encoded_key: u64) -> Self {
         Self {
             id: encoded_key,
             pd: PhantomData,
         }
     }
 
-    fn write_to_storage(&self, _key: u64) {
+    fn write(&self, _key: u64) {
         // Mapping types can not directly be written to a storage slot
-        // Instead the elements they contain, need to be individually written to their own slots
+        // Instead the elements they contain need to be individually written to their own slots
         revert();
     }
 }
 
-impl<K: SolValue, V: SlotStorable> Mapping<K, V> {
+impl<K: SolValue, V: StorageStorable> Mapping<K, V> {
     pub fn encode_key(&self, key: K) -> u64 {
         let key_bytes = key.abi_encode();
         let id_bytes = self.id.to_le_bytes();
@@ -74,10 +74,10 @@ impl<K: SolValue, V: SlotStorable> Mapping<K, V> {
     }
 
     pub fn read(&self, key: K) -> V {
-        V::read_from_storage(self.encode_key(key))
+        V::read(self.encode_key(key))
     }
 
     pub fn write(&self, key: K, value: V) {
-        value.write_to_storage(self.encode_key(key));
+        value.write(self.encode_key(key));
     }
 }
