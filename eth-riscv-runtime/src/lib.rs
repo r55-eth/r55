@@ -11,6 +11,7 @@ pub use riscv_rt::entry;
 mod alloc;
 pub mod types;
 pub mod block;
+pub mod tx;
 
 pub mod log;
 pub use log::{emit_log, Event};
@@ -52,17 +53,21 @@ pub fn return_riscv(addr: u64, offset: u64) -> ! {
     unreachable!()
 }
 
-pub fn sload(key: u64) -> u64 {
-    let value: u64;
+pub fn sload(key: u64) -> U256 {
+    let first: u64;
+    let second: u64;
+    let third: u64;
+    let fourth: u64;
     unsafe {
-        asm!("ecall", lateout("a0") value, in("a0") key, in("t0") u8::from(Syscall::SLoad));
+        asm!("ecall", lateout("a0") first, lateout("a1") second, lateout("a2") third, lateout("a3") fourth, in("a0") key, in("t0") u8::from(Syscall::SLoad));
     }
-    value
+    U256::from_limbs([first, second, third, fourth])
 }
 
-pub fn sstore(key: u64, value: u64) {
-    unsafe {
-        asm!("ecall", in("a0") key, in("a1") value, in("t0") u8::from(Syscall::SStore));
+pub fn sstore(key: u64, value: U256) {
+    let limbs = value.as_limbs();
+    unsafe {    
+        asm!("ecall", in("a0") key, in("a1") limbs[0], in("a2") limbs[1], in("a3") limbs[2], in("a4") limbs[3], in("t0") u8::from(Syscall::SStore));
     }
 }
 

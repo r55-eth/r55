@@ -1,4 +1,5 @@
 use alloy_core::primitives::Keccak256;
+use core::{cell::RefCell, ops::Range};
 use eth_riscv_interpreter::setup_from_elf;
 use eth_riscv_syscalls::Syscall;
 use revm::{
@@ -11,9 +12,11 @@ use revm::{
     Database, Evm, Frame, FrameOrResult, InMemoryDB,
 };
 use rvemu::{emulator::Emulator, exception::Exception};
-use std::{cell::RefCell, ops::Range, rc::Rc, sync::Arc};
+use std::{rc::Rc, sync::Arc};
 
-pub fn deploy_contract(db: &mut InMemoryDB, bytecode: Bytes) -> Address {
+use super::error::{Error, Result, TxResult};
+
+pub fn deploy_contract(db: &mut InMemoryDB, bytecode: Bytes) -> Result<Address> {
     let mut evm = Evm::builder()
         .with_db(db)
         .modify_tx_env(|tx| {
@@ -26,7 +29,7 @@ pub fn deploy_contract(db: &mut InMemoryDB, bytecode: Bytes) -> Address {
         .build();
     evm.cfg_mut().limit_contract_code_size = Some(usize::MAX);
 
-    let result = evm.transact_commit().unwrap();
+    let result = evm.transact_commit()?;
 
     match result {
         ExecutionResult::Success {
@@ -34,43 +37,46 @@ pub fn deploy_contract(db: &mut InMemoryDB, bytecode: Bytes) -> Address {
             ..
         } => {
             println!("Deployed at addr: {:?}", addr);
-            addr
+            Ok(addr)
         }
-        result => panic!("Unexpected result: {:?}", result),
+        result => Err(Error::UnexpectedExecResult(result)),
     }
 }
-pub struct TxResult {
-    pub output: Vec<u8>,
-    pub logs: Vec<Log>  
-}
 
-pub fn run_tx(db: &mut InMemoryDB, addr: &Address, calldata: Vec<u8>) -> TxResult {
+pub fn run_tx(db: &mut InMemoryDB, addr: &Address, calldata: Vec<u8>) -> Result<TxResult> {
     let mut evm = Evm::builder()
         .with_db(db)
         .modify_tx_env(|tx| {
-            tx.caller = address!("0000000000000000000000000000000000000007");
+            tx.caller = address!("0000000000000000000000000000000000000001");
             tx.transact_to = TransactTo::Call(*addr);
             tx.data = calldata.into();
             tx.value = U256::from(0);
+            tx.gas_price = U256::from(42);
+            tx.gas_limit = 100_000;
         })
         .append_handler_register(handle_register)
         .build();
 
-    let result = evm.transact_commit().unwrap();
+    let result = evm.transact_commit()?;
 
     match result {
         ExecutionResult::Success {
-            output: Output::Call(value),
+            reason,
+            gas_used,
+            gas_refunded: _,
             logs,
+            output: Output::Call(value),
             ..
         } => {
             println!("Tx result: {:?}", value);
-            TxResult {
-                output:value.into(),
-                logs
-            }
-        },
-        result => panic!("Unexpected result: {:?}", result),
+            Ok(TxResult {
+                output: value.into(),
+                logs,
+                gas_used,
+                status: true,
+            })
+        }
+        result => Err(Error::UnexpectedExecResult(result)),
     }
 }
 
@@ -86,11 +92,17 @@ fn riscv_context(frame: &Frame) -> Option<RVEmu> {
     let Some((0xFF, bytecode)) = interpreter.bytecode.split_first() else {
         return None;
     };
-    let emu = setup_from_elf(bytecode, &interpreter.contract.input);
-    Some(RVEmu {
-        emu,
-        returned_data_destiny: None,
-    })
+
+    match setup_from_elf(bytecode, &interpreter.contract.input) {
+        Ok(emu) => Some(RVEmu {
+            emu,
+            returned_data_destiny: None,
+        }),
+        Err(err) => {
+            println!("Failed to setup from ELF: {err}");
+            None
+        }
+    }
 }
 
 pub fn handle_register<EXT, DB: Database>(handler: &mut EvmHandler<'_, EXT, DB>) {
@@ -122,7 +134,7 @@ pub fn handle_register<EXT, DB: Database>(handler: &mut EvmHandler<'_, EXT, DB>)
     let old_handle = handler.execution.execute_frame.clone();
     handler.execution.execute_frame = Arc::new(move |frame, memory, instraction_table, ctx| {
         let result = if let Some(Some(riscv_context)) = call_stack.borrow_mut().first_mut() {
-            execute_riscv(riscv_context, frame.interpreter_mut(), memory, ctx)
+            execute_riscv(riscv_context, frame.interpreter_mut(), memory, ctx)?
         } else {
             old_handle(frame, memory, instraction_table, ctx)?
         };
@@ -140,27 +152,23 @@ fn execute_riscv(
     interpreter: &mut Interpreter,
     shared_memory: &mut SharedMemory,
     host: &mut dyn Host,
-) -> InterpreterAction {
+) -> Result<InterpreterAction> {
     let emu = &mut rvemu.emu;
     let returned_data_destiny = &mut rvemu.returned_data_destiny;
     if let Some(destiny) = std::mem::take(returned_data_destiny) {
-        let data = emu
-            .cpu
-            .bus
-            .get_dram_slice(destiny)
-            .unwrap_or_else(|e| panic!("Unable to get destiny dram slice ({e:?})"));
+        let data = emu.cpu.bus.get_dram_slice(destiny)?;
         data.copy_from_slice(shared_memory.slice(0, data.len()))
     }
 
     let return_revert = |interpreter: &mut Interpreter| {
-        InterpreterAction::Return {
+        Ok(InterpreterAction::Return {
             result: InterpreterResult {
                 result: InstructionResult::Revert,
                 // return empty bytecode
                 output: Bytes::new(),
                 gas: interpreter.gas,
             },
-        }
+        })
     };
 
     // Run emulator and capture ecalls
@@ -179,21 +187,25 @@ fn execute_riscv(
                     Syscall::Return => {
                         let ret_offset: u64 = emu.cpu.xregs.read(10);
                         let ret_size: u64 = emu.cpu.xregs.read(11);
-                        let data_bytes = dram_slice(emu, ret_offset, ret_size);
+                        let data_bytes = dram_slice(emu, ret_offset, ret_size)?;
 
-                        return InterpreterAction::Return {
+                        return Ok(InterpreterAction::Return {
                             result: InterpreterResult {
                                 result: InstructionResult::Return,
                                 output: data_bytes.to_vec().into(),
                                 gas: interpreter.gas, // FIXME: gas is not correct
                             },
-                        };
+                        });
                     }
                     Syscall::SLoad => {
                         let key: u64 = emu.cpu.xregs.read(10);
                         match host.sload(interpreter.contract.target_address, U256::from(key)) {
                             Some((value, _is_cold)) => {
-                                emu.cpu.xregs.write(10, value.as_limbs()[0]);
+                                let limbs = value.as_limbs();
+                                emu.cpu.xregs.write(10, limbs[0]);
+                                emu.cpu.xregs.write(11, limbs[1]);
+                                emu.cpu.xregs.write(12, limbs[2]);
+                                emu.cpu.xregs.write(13, limbs[3]);
                             }
                             _ => {
                                 return return_revert(interpreter);
@@ -202,17 +214,20 @@ fn execute_riscv(
                     }
                     Syscall::SStore => {
                         let key: u64 = emu.cpu.xregs.read(10);
-                        let value: u64 = emu.cpu.xregs.read(11);
+                        let first: u64 = emu.cpu.xregs.read(11);
+                        let second: u64 = emu.cpu.xregs.read(12);
+                        let third: u64 = emu.cpu.xregs.read(13);
+                        let fourth: u64 = emu.cpu.xregs.read(14);
                         host.sstore(
                             interpreter.contract.target_address,
                             U256::from(key),
-                            U256::from(value),
+                            U256::from_limbs([first, second, third, fourth]),
                         );
                     }
                     Syscall::Call => {
                         let a0: u64 = emu.cpu.xregs.read(10);
                         let address =
-                            Address::from_slice(emu.cpu.bus.get_dram_slice(a0..(a0 + 20)).unwrap());
+                            Address::from_slice(emu.cpu.bus.get_dram_slice(a0..(a0 + 20))?);
                         let value: u64 = emu.cpu.xregs.read(11);
                         let args_offset: u64 = emu.cpu.xregs.read(12);
                         let args_size: u64 = emu.cpu.xregs.read(13);
@@ -222,13 +237,12 @@ fn execute_riscv(
                         *returned_data_destiny = Some(ret_offset..(ret_offset + ret_size));
 
                         let tx = &host.env().tx;
-                        return InterpreterAction::Call {
+                        return Ok(InterpreterAction::Call {
                             inputs: Box::new(CallInputs {
                                 input: emu
                                     .cpu
                                     .bus
-                                    .get_dram_slice(args_offset..(args_offset + args_size))
-                                    .unwrap()
+                                    .get_dram_slice(args_offset..(args_offset + args_size))?
                                     .to_vec()
                                     .into(),
                                 gas_limit: tx.gas_limit,
@@ -243,25 +257,24 @@ fn execute_riscv(
                                 is_eof: false,
                                 return_memory_offset: 0..ret_size as usize,
                             }),
-                        };
+                        });
                     }
                     Syscall::Revert => {
-                        return InterpreterAction::Return {
+                        return Ok(InterpreterAction::Return {
                             result: InterpreterResult {
                                 result: InstructionResult::Revert,
                                 output: Bytes::from(0u32.to_le_bytes()), //TODO: return revert(0,0)
                                 gas: interpreter.gas, // FIXME: gas is not correct
                             },
-                        };
+                        });
                     }
                     Syscall::Caller => {
                         let caller = interpreter.contract.caller;
                         // Break address into 3 u64s and write to registers
                         let caller_bytes = caller.as_slice();
-                        let first_u64 = u64::from_be_bytes(caller_bytes[0..8].try_into().unwrap());
+                        let first_u64 = u64::from_be_bytes(caller_bytes[0..8].try_into()?);
                         emu.cpu.xregs.write(10, first_u64);
-                        let second_u64 =
-                            u64::from_be_bytes(caller_bytes[8..16].try_into().unwrap());
+                        let second_u64 = u64::from_be_bytes(caller_bytes[8..16].try_into()?);
                         emu.cpu.xregs.write(11, second_u64);
                         let mut padded_bytes = [0u8; 8];
                         padded_bytes[..4].copy_from_slice(&caller_bytes[16..20]);
@@ -271,7 +284,7 @@ fn execute_riscv(
                     Syscall::Keccak256 => {
                         let ret_offset: u64 = emu.cpu.xregs.read(10);
                         let ret_size: u64 = emu.cpu.xregs.read(11);
-                        let data_bytes = dram_slice(emu, ret_offset, ret_size);
+                        let data_bytes = dram_slice(emu, ret_offset, ret_size)?;
 
                         let mut hasher = Keccak256::new();
                         hasher.update(data_bytes);
@@ -280,16 +293,16 @@ fn execute_riscv(
                         // Write the hash to the emulator's registers
                         emu.cpu
                             .xregs
-                            .write(10, u64::from_le_bytes(hash[0..8].try_into().unwrap()));
+                            .write(10, u64::from_le_bytes(hash[0..8].try_into()?));
                         emu.cpu
                             .xregs
-                            .write(11, u64::from_le_bytes(hash[8..16].try_into().unwrap()));
+                            .write(11, u64::from_le_bytes(hash[8..16].try_into()?));
                         emu.cpu
                             .xregs
-                            .write(12, u64::from_le_bytes(hash[16..24].try_into().unwrap()));
+                            .write(12, u64::from_le_bytes(hash[16..24].try_into()?));
                         emu.cpu
                             .xregs
-                            .write(13, u64::from_le_bytes(hash[24..32].try_into().unwrap()));
+                            .write(13, u64::from_le_bytes(hash[24..32].try_into()?));
                     }
                     Syscall::CallValue => {
                         let value = interpreter.contract.call_value;
@@ -335,6 +348,32 @@ fn execute_riscv(
                         emu.cpu.xregs.write(12, limbs[2]);
                         emu.cpu.xregs.write(13, limbs[3]);
                     }
+                    Syscall::GasPrice => {
+                        let value = host.env().tx.gas_price;
+                        let limbs = value.as_limbs();
+                        emu.cpu.xregs.write(10, limbs[0]);
+                        emu.cpu.xregs.write(11, limbs[1]);
+                        emu.cpu.xregs.write(12, limbs[2]);
+                        emu.cpu.xregs.write(13, limbs[3]);
+                    }
+                    Syscall::Origin => {
+                        // Syscall::Origin
+                        let origin = host.env().tx.caller;
+                        // Break address into 3 u64s and write to registers
+                        let origin_bytes = origin.as_slice();
+
+                        let first_u64 = u64::from_be_bytes(origin_bytes[0..8].try_into().unwrap());
+                        emu.cpu.xregs.write(10, first_u64);
+
+                        let second_u64 =
+                            u64::from_be_bytes(origin_bytes[8..16].try_into().unwrap());
+                        emu.cpu.xregs.write(11, second_u64);
+
+                        let mut padded_bytes = [0u8; 8];
+                        padded_bytes[..4].copy_from_slice(&origin_bytes[16..20]);
+                        let third_u64 = u64::from_be_bytes(padded_bytes);
+                        emu.cpu.xregs.write(12, third_u64);
+                    }
                     Syscall::Log => {
                         let data_ptr: u64 = emu.cpu.xregs.read(10);
                         let data_size: u64 = emu.cpu.xregs.read(11);
@@ -376,13 +415,13 @@ fn execute_riscv(
 }
 
 /// Returns RISC-V DRAM slice in a given size range, starts with a given offset
-fn dram_slice(emu: &mut Emulator, ret_offset: u64, ret_size: u64) -> &mut [u8] {
+fn dram_slice(emu: &mut Emulator, ret_offset: u64, ret_size: u64) -> Result<&mut [u8]> {
     if ret_size != 0 {
-        emu.cpu
+        Ok(emu
+            .cpu
             .bus
-            .get_dram_slice(ret_offset..(ret_offset + ret_size))
-            .unwrap()
+            .get_dram_slice(ret_offset..(ret_offset + ret_size))?)
     } else {
-        &mut []
+        Ok(&mut [])
     }
 }
