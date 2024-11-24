@@ -30,6 +30,15 @@ pub struct Transfer {
     pub value: u64
 }
 
+#[derive(Event)]
+pub struct Mint {
+    #[indexed]
+    pub from: Address,
+    #[indexed]
+    pub to: Address,
+    pub value: u64
+}
+
 #[contract]
 impl ERC20 {
     pub fn balance_of(&self, owner: Address) -> u64 {
@@ -87,7 +96,7 @@ impl ERC20 {
 
         let to_balance = self.balances.read(to);
         self.balances.write(to, to_balance + value);
-
+        log::emit(Mint::new(owner, to, value));
         true
     }
 }
