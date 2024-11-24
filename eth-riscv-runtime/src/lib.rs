@@ -12,8 +12,8 @@ mod alloc;
 pub mod types;
 pub mod block;
 
-mod log;
-pub use log::emit_log;
+pub mod log;
+pub use log::{emit_log, Event};
 
 const CALLDATA_ADDRESS: usize = 0x8000_0000;
 

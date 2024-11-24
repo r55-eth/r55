@@ -20,6 +20,9 @@ pub fn event_derive(input: TokenStream) -> TokenStream {
         panic!("Event must be a struct");
     };
 
+    // Collect iterators into vectors
+    let field_names: Vec<_> = fields.iter().map(|f| &f.ident).collect();
+    let field_types: Vec<_> = fields.iter().map(|f| &f.ty).collect();
     let indexed_fields: Vec<_> = fields
         .iter()
         .filter(|f| {
@@ -34,6 +37,48 @@ pub fn event_derive(input: TokenStream) -> TokenStream {
             const INDEXED_FIELDS: &'static [&'static str] = &[
                 #(stringify!(#indexed_fields)),*
             ];
+
+            pub fn new(#(#field_names: #field_types),*) -> Self {
+                Self {
+                    #(#field_names),*
+                }
+            }
+        }
+
+        impl eth_riscv_runtime::log::Event for #name {
+            fn encode_log(&self) -> (alloc::vec::Vec<u8>, alloc::vec::Vec<[u8; 32]>) {
+                use alloy_sol_types::SolValue;
+                use alloy_core::primitives::{keccak256, B256};
+                use alloc::vec::Vec;
+
+                let mut signature = Vec::new();
+                signature.extend_from_slice(Self::NAME.as_bytes());
+                signature.extend_from_slice(b"(");
+
+                let mut first = true;
+                let mut topics = alloc::vec![B256::default()];
+                let mut data = Vec::new();
+
+                #(
+                    if !first { signature.extend_from_slice(b","); }
+                    first = false;
+                    
+                    signature.extend_from_slice(self.#field_names.sol_type_name().as_bytes());
+                    let encoded = self.#field_names.abi_encode();
+
+                    let field_name = stringify!(#field_names);
+                    if Self::INDEXED_FIELDS.contains(&field_name) && topics.len() < 4 {
+                        topics.push(B256::from_slice(&encoded));
+                    } else {
+                        data.extend_from_slice(&encoded);
+                    }
+                )*
+
+                signature.extend_from_slice(b")");
+                topics[0] = B256::from(keccak256(&signature));
+
+                (data, topics.iter().map(|t| t.0).collect())
+            }
         }
     };
 
@@ -126,61 +171,7 @@ pub fn contract(_attr: TokenStream, item: TokenStream) -> TokenStream {
         #[macro_export]
         macro_rules! get_type_signature {
             ($arg:expr) => {
-                match stringify!($arg) {
-                    // Address
-                    s if s.contains("Address") => b"address",
-    
-                    // Unsigned integers
-                    s if s.contains("u8") => b"uint8",
-                    s if s.contains("u16") => b"uint16",
-                    s if s.contains("u32") => b"uint32",
-                    s if s.contains("u64") => b"uint64",
-                    s if s.contains("u128") => b"uint128",
-                    s if s.contains("U256") => b"uint256",
-    
-                    // Signed integers
-                    s if s.contains("i8") => b"int8",
-                    s if s.contains("i16") => b"int16",
-                    s if s.contains("i32") => b"int32",
-                    s if s.contains("i64") => b"int64",
-                    s if s.contains("i128") => b"int128",
-                    s if s.contains("I256") => b"int256",
-    
-                    // Boolean
-                    s if s.contains("bool") => b"bool",
-    
-                    // Bytes y FixedBytes
-                    s if s.contains("B256") => b"bytes32",
-                    s if s.contains("[u8; 32]") => b"bytes32",
-                    s if s.contains("[u8; 20]") => b"bytes20",
-                    s if s.contains("[u8; 16]") => b"bytes16",
-                    s if s.contains("[u8; 8]") => b"bytes8",
-                    s if s.contains("[u8; 4]") => b"bytes4",
-                    s if s.contains("[u8; 1]") => b"bytes1",
-    
-                    // Dynamic bytes & strings
-                    s if s.contains("Vec<u8>") => b"bytes",
-                    s if s.contains("String") => b"string",
-    
-                    // Dynamic arrays
-                    s if s.contains("Vec<Address>") => b"address[]",
-                    s if s.contains("Vec<U256>") => b"uint256[]",
-                    s if s.contains("Vec<bool>") => b"bool[]",
-                    s if s.contains("Vec<B256>") => b"bytes32[]",
-    
-                    // Static arrays
-                    s if s.contains("[Address; ") => b"address[]",
-                    s if s.contains("[U256; ") => b"uint256[]",
-                    s if s.contains("[bool; ") => b"bool[]",
-                    s if s.contains("[B256; ") => b"bytes32[]",
-    
-                    // Tuples
-                    s if s.contains("(Address, U256)") => b"(address,uint256)",
-                    s if s.contains("(U256, bool)") => b"(uint256,bool)",
-                    s if s.contains("(Address, Address)") => b"(address,address)",
-    
-                    _ => b"uint64",
-                }
+                $arg.sol_type_name().as_bytes()
             };
         }
     
@@ -206,7 +197,6 @@ pub fn contract(_attr: TokenStream, item: TokenStream) -> TokenStream {
                     signature.extend_from_slice(get_type_signature!($field));
                     let encoded = $field.abi_encode();
                     
-                    // Aquí debes mapear $field a el identificador correspondiente en $event
                     let field_ident = stringify!($field);
                     if $event::INDEXED_FIELDS.contains(&field_ident) && topics.len() < 4 {
                         topics.push(B256::from_slice(&encoded));

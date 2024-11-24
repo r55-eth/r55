@@ -12,8 +12,6 @@ extern crate alloc;
 #[derive(Default)]
 pub struct ERC20 {
     balance: Mapping<Address, u64>,
-    paused: bool,
-    metadata: [u8; 32],
 }
 
 #[derive(Event)]
@@ -23,30 +21,6 @@ pub struct Transfer {
     #[indexed]
     pub to: Address,
     pub value: u64
-}
-
-#[derive(Event)]
-pub struct Mint {
-    #[indexed]
-    pub to: Address,
-    pub value: u64
-}
-
-#[derive(Event)]
-pub struct Burn {
-    #[indexed]
-    pub from: Address,
-    pub value: u64
-}
-
-#[derive(Event)]
-pub struct PauseChanged {
-    pub paused: bool
-}
-
-#[derive(Event)]
-pub struct MetadataUpdated {
-    pub data: [u8; 32]
 }
 
 #[contract]
@@ -67,7 +41,7 @@ impl ERC20 {
         self.balance.write(from, from_balance - value);
         self.balance.write(to, to_balance + value);
 
-        emit!(Transfer, from, to, value);
+        log::emit(Transfer::new(from, to, value));
         true
     }
 
@@ -81,31 +55,6 @@ impl ERC20 {
         let to_balance = self.balance.read(to);
         self.balance.write(to, to_balance + value);
 
-        emit!(Mint, to, value);
-        true
-    }
-
-    pub fn burn(&self, from: Address, value: u64) -> bool {
-        let from_balance = self.balance.read(from);
-        if from_balance < value {
-            revert();
-        }
-        
-        self.balance.write(from, from_balance - value);
-
-        emit!(Burn, from, value);
-        true
-    }
-
-    pub fn set_paused(&self, paused: bool) -> bool {
-
-        emit!(PauseChanged, paused);
-        true
-    }
-
-    pub fn update_metadata(&self, data: [u8; 32]) -> bool {
-
-        emit!(MetadataUpdated, data);
         true
     }
 }

@@ -340,28 +340,26 @@ fn execute_riscv(
                         let data_size: u64 = emu.cpu.xregs.read(11);
                         let topics_ptr: u64 = emu.cpu.xregs.read(12);
                         let topics_size: u64 = emu.cpu.xregs.read(13);
-                
-                        let data = if data_size > 0 {
-                            emu.cpu.bus
-                                .get_dram_slice(data_ptr..(data_ptr + data_size))
-                                .unwrap_or_default()
-                                .to_vec()
-                        } else {
-                            vec![]
+                    
+                        // Read data
+                        let data_slice = match emu.cpu.bus.get_dram_slice(data_ptr..(data_ptr + data_size)) {
+                            Ok(slice) => slice,
+                            Err(_) => &mut[],
                         };
-                
-                        let mut topics = Vec::new();
-                        if topics_size > 0 {
-                            for i in 0..topics_size {
-                                let topic_ptr = topics_ptr + (i * 32);
-                                if let Ok(topic_data) = emu.cpu.bus
-                                    .get_dram_slice(topic_ptr..(topic_ptr + 32))
-                                {
-                                    topics.push(B256::from_slice(topic_data));
-                                }
-                            }
-                        }
-                
+                        let data = data_slice.to_vec();
+                    
+                        // Read topics
+                        let topics_start = topics_ptr;
+                        let topics_end = topics_ptr + topics_size * 32;
+                        let topics_slice = match emu.cpu.bus.get_dram_slice(topics_start..topics_end) {
+                            Ok(slice) => slice,
+                            Err(_) => &mut[], 
+                        };
+                        let topics = topics_slice
+                            .chunks(32)
+                            .map(|chunk| B256::from_slice(chunk))
+                            .collect::<Vec<B256>>();
+                    
                         host.log(Log::new_unchecked(
                             interpreter.contract.target_address,
                             topics,
