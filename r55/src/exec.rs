@@ -12,7 +12,7 @@ use revm::{
     Database, Evm, Frame, FrameOrResult, InMemoryDB,
 };
 use rvemu::{emulator::Emulator, exception::Exception};
-use std::{rc::Rc, sync::Arc};
+use std::{collections::BTreeMap, rc::Rc, sync::Arc};
 
 use super::error::{Error, Result, TxResult};
 
@@ -154,13 +154,15 @@ fn execute_riscv(
     host: &mut dyn Host,
 ) -> Result<InterpreterAction> {
     let emu = &mut rvemu.emu;
+    emu.cpu.is_count = true;
     let returned_data_destiny = &mut rvemu.returned_data_destiny;
     if let Some(destiny) = std::mem::take(returned_data_destiny) {
         let data = emu.cpu.bus.get_dram_slice(destiny)?;
         data.copy_from_slice(shared_memory.slice(0, data.len()))
     }
 
-    let return_revert = |interpreter: &mut Interpreter| {
+    let return_revert = |interpreter: &mut Interpreter, gas_used: u64| {
+        let _ = interpreter.gas.record_cost(gas_used);
         Ok(InterpreterAction::Return {
             result: InterpreterResult {
                 result: InstructionResult::Revert,
@@ -170,7 +172,8 @@ fn execute_riscv(
             },
         })
     };
-
+    // Tracks gas usage across EVM host calls
+    let mut evm_gas = 0;
     // Run emulator and capture ecalls
     loop {
         let run_result = emu.start();
@@ -180,14 +183,29 @@ fn execute_riscv(
 
                 let Ok(syscall) = Syscall::try_from(t0 as u8) else {
                     println!("Unhandled syscall: {:?}", t0);
-                    return return_revert(interpreter);
+                    return return_revert(interpreter, evm_gas);
                 };
 
                 match syscall {
                     Syscall::Return => {
                         let ret_offset: u64 = emu.cpu.xregs.read(10);
                         let ret_size: u64 = emu.cpu.xregs.read(11);
+
+                        let r55_gas = r55_gas_used(&emu.cpu.inst_counter.clone());
                         let data_bytes = dram_slice(emu, ret_offset, ret_size)?;
+
+                        let total_cost = r55_gas + evm_gas;
+                        println!("evm gas: {}, r55 gas: {}, total cost: {}", evm_gas, r55_gas, total_cost);
+                        let in_limit = interpreter.gas.record_cost(total_cost);
+                        if !in_limit {
+                            return Ok(InterpreterAction::Return {
+                                result: InterpreterResult {
+                                    result: InstructionResult::OutOfGas,
+                                    output: Bytes::new(),
+                                    gas: interpreter.gas,
+                                },
+                            });
+                        }
 
                         return Ok(InterpreterAction::Return {
                             result: InterpreterResult {
@@ -200,15 +218,20 @@ fn execute_riscv(
                     Syscall::SLoad => {
                         let key: u64 = emu.cpu.xregs.read(10);
                         match host.sload(interpreter.contract.target_address, U256::from(key)) {
-                            Some((value, _is_cold)) => {
+                            Some((value, is_cold)) => {
                                 let limbs = value.as_limbs();
                                 emu.cpu.xregs.write(10, limbs[0]);
                                 emu.cpu.xregs.write(11, limbs[1]);
                                 emu.cpu.xregs.write(12, limbs[2]);
                                 emu.cpu.xregs.write(13, limbs[3]);
+                                if is_cold {
+                                    evm_gas += 2100
+                                } else {
+                                    evm_gas += 100
+                                }
                             }
                             _ => {
-                                return return_revert(interpreter);
+                                return return_revert(interpreter, evm_gas);
                             }
                         }
                     }
@@ -218,11 +241,18 @@ fn execute_riscv(
                         let second: u64 = emu.cpu.xregs.read(12);
                         let third: u64 = emu.cpu.xregs.read(13);
                         let fourth: u64 = emu.cpu.xregs.read(14);
-                        host.sstore(
+                        let result = host.sstore(
                             interpreter.contract.target_address,
                             U256::from(key),
                             U256::from_limbs([first, second, third, fourth]),
                         );
+                        if let Some(result) = result {
+                            if result.is_cold {
+                                evm_gas += 2200
+                            } else {
+                                evm_gas += 100
+                            }
+                        }
                     }
                     Syscall::Call => {
                         let a0: u64 = emu.cpu.xregs.read(10);
@@ -408,7 +438,8 @@ fn execute_riscv(
                 }
             }
             _ => {
-                return return_revert(interpreter);
+                let total_cost = r55_gas_used(&emu.cpu.inst_counter.clone()) + evm_gas;
+                return return_revert(interpreter, total_cost);
             }
         }
     }
@@ -424,4 +455,12 @@ fn dram_slice(emu: &mut Emulator, ret_offset: u64, ret_size: u64) -> Result<&mut
     } else {
         Ok(&mut [])
     }
+}
+
+fn r55_gas_used(inst_count: &BTreeMap<String, u64>) -> u64 {
+    // Assuming 1 instruction = 1 gas rn
+    let num_inst = inst_count.iter().map(|(_, count)| count).sum::<u64>();
+    // This is the minimimum gas used to call a zero-logic r55 function with no arguments
+    let base_cost = 3_933_428;
+    num_inst - base_cost
 }

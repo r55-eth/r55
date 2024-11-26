@@ -6,7 +6,7 @@ license.workspace = true
 repository.workspace = true
 
 [dependencies]
-rvemu = { git = "https://github.com/lvella/rvemu.git" }
+rvemu = { git="https://github.com/0xRampey/rvemu.git", branch="count_instr" }
 
 thiserror.workspace = true
 
