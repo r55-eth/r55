@@ -92,6 +92,14 @@ Nothing has to be changed in how transactions are handled or created.
 - [R55 Ethereum Runtime](https://github.com/leonardoalt/r55/tree/main/eth-riscv-runtime)
 - [R55 Compiler](https://github.com/leonardoalt/r55/tree/main/r55)
 
+# Prerequisites
+
+## macOS
+
+```shell
+brew install riscv-gnu-toolchain gettext
+```
+
 # Test
 
 The [R55](https://github.com/leonardoalt/r55/tree/main/r55) crate has a binary
