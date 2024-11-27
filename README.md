@@ -103,7 +103,7 @@ running two transactions on it, first a `mint` then a `balance_of` check.
 You'll need to install Rust's RISCV toolchain:
 
 ```console
-$ rustup install nightly-2024-02-01-x86_64-unknown-linux-gnu  
+$ rustup install nightly-2024-02-01-x86_64-unknown-linux-gnu
 ```
 
 Now run:
