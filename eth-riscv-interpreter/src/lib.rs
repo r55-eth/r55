@@ -55,10 +55,25 @@ mod tests {
 
     use super::*;
     use std::fs;
+    use std::process::Command;
 
     #[test]
     fn test_execute_elf() -> eyre::Result<()> {
-        let elf_data = fs::read("../asm-runtime-example/runtime")?;
+        let runtime_path = "../asm-runtime-example/runtime";
+
+        // Check if the runtime ELF exists; if not, run `make` to generate it
+        if !fs::metadata(runtime_path).is_ok() {
+            let status = Command::new("make")
+                .current_dir("../asm-runtime-example")
+                .status()?;
+
+            // Check if the `make` command succeeded
+            if !status.success() {
+                panic!("`make` command failed. Please check if the prerequisites are installed.");
+            }
+        }
+
+        let elf_data = fs::read(runtime_path)?;
         let mut emu = setup_from_elf(&elf_data, &[])?;
         let result = emu.start();
         assert_eq!(result, Err(Exception::EnvironmentCallFromMMode));
