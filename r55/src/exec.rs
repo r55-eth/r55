@@ -195,7 +195,10 @@ fn execute_riscv(
                         let data_bytes = dram_slice(emu, ret_offset, ret_size)?;
 
                         let total_cost = r55_gas + evm_gas;
-                        println!("evm gas: {}, r55 gas: {}, total cost: {}", evm_gas, r55_gas, total_cost);
+                        println!(
+                            "evm gas: {}, r55 gas: {}, total cost: {}",
+                            evm_gas, r55_gas, total_cost
+                        );
                         let in_limit = interpreter.gas.record_cost(total_cost);
                         if !in_limit {
                             return Ok(InterpreterAction::Return {
@@ -458,9 +461,32 @@ fn dram_slice(emu: &mut Emulator, ret_offset: u64, ret_size: u64) -> Result<&mut
 }
 
 fn r55_gas_used(inst_count: &BTreeMap<String, u64>) -> u64 {
-    // Assuming 1 instruction = 1 gas rn
-    let num_inst = inst_count.iter().map(|(_, count)| count).sum::<u64>();
-    // This is the minimimum gas used to call a zero-logic r55 function with no arguments
-    let base_cost = 3_933_428;
-    num_inst - base_cost
+    let total_cost = inst_count
+        .iter()
+        .map(|(instr_name, count)|
+            // Gas cost = number of instructions * cycles per instruction
+            match instr_name.as_str() {
+                // Gas map to approximate cost of each instruction
+                // References:
+                // http://ithare.com/infographics-operation-costs-in-cpu-clock-cycles/
+                // https://www.evm.codes/?fork=cancun#54
+                // Division and remainder
+                s if s.starts_with("div") || s.starts_with("rem") => count * 25,
+                // Multiplications
+                s if s.starts_with("mul") => count * 5,
+                // Loads
+                "lb" | "lh" | "lw" | "ld" | "lbu" | "lhu" | "lwu" => count * 3, // Cost analagous to `MLOAD`
+                // Stores
+                "sb" | "sh" | "sw" | "sd" | "sc.w" | "sc.d" => count * 3, // Cost analagous to `MSTORE`
+                // Branching
+                "beq" | "bne" | "blt" | "bge" | "bltu" | "bgeu" | "jal" | "jalr" => count * 3,
+                _ => *count, // All other instructions including `add` and `sub`
+        })
+        .sum::<u64>();
+
+    // This is the minimum "gas used" to ABI decode 'empty' calldata into Rust type arguments. Real calldata will take more gas.
+    // Internalising this would focus gas metering more on the function logic
+    let base_cost = 9_175_538;
+
+    total_cost - base_cost
 }
