@@ -90,13 +90,10 @@ impl ERC20 {
     #[payable]
     pub fn mint(&self, to: Address, value: u64) -> bool {
         let owner = msg_sender();
-        if owner != address!("0000000000000000000000000000000000000001") {
-            revert();
-        }
 
         let to_balance = self.balances.read(to);
         self.balances.write(to, to_balance + value);
-        log::emit(Transfer::new(address!("0000000000000000000000000000000000000000"), to, value));
+        log::emit(Transfer::new(owner, to, value));
         true
     }
 }
