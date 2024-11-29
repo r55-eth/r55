@@ -191,7 +191,7 @@ fn execute_riscv(
                         let ret_offset: u64 = emu.cpu.xregs.read(10);
                         let ret_size: u64 = emu.cpu.xregs.read(11);
 
-                        let r55_gas = r55_gas_used(&emu.cpu.inst_counter.clone());
+                        let r55_gas = r55_gas_used(&emu.cpu.inst_counter);
                         let data_bytes = dram_slice(emu, ret_offset, ret_size)?;
 
                         let total_cost = r55_gas + evm_gas;
@@ -441,7 +441,7 @@ fn execute_riscv(
                 }
             }
             _ => {
-                let total_cost = r55_gas_used(&emu.cpu.inst_counter.clone()) + evm_gas;
+                let total_cost = r55_gas_used(&emu.cpu.inst_counter) + evm_gas;
                 return return_revert(interpreter, total_cost);
             }
         }
@@ -463,9 +463,9 @@ fn dram_slice(emu: &mut Emulator, ret_offset: u64, ret_size: u64) -> Result<&mut
 fn r55_gas_used(inst_count: &BTreeMap<String, u64>) -> u64 {
     let total_cost = inst_count
         .iter()
-        .map(|(instr_name, count)|
+        .map(|(inst_name, count)|
             // Gas cost = number of instructions * cycles per instruction
-            match instr_name.as_str() {
+            match inst_name.as_str() {
                 // Gas map to approximate cost of each instruction
                 // References:
                 // http://ithare.com/infographics-operation-costs-in-cpu-clock-cycles/
@@ -484,7 +484,7 @@ fn r55_gas_used(inst_count: &BTreeMap<String, u64>) -> u64 {
         })
         .sum::<u64>();
 
-    // This is the minimum "gas used" to ABI decode 'empty' calldata into Rust type arguments. Real calldata will take more gas.
+    // This is the minimum 'gas used' to ABI decode 'empty' calldata into Rust type arguments. Real calldata will take more gas.
     // Internalising this would focus gas metering more on the function logic
     let base_cost = 9_175_538;
 
