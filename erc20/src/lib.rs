@@ -93,7 +93,7 @@ impl ERC20 {
 
         let to_balance = self.balances.read(to);
         self.balances.write(to, to_balance + value);
-        log::emit(Transfer::new(owner, to, value));
+        log::emit(Transfer::new(0, to, value));
         true
     }
 }
