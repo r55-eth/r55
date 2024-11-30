@@ -8,12 +8,12 @@ use std::fs::File;
 use std::io::Read;
 use std::process::Command;
 
+use alloy_core::hex;
 use alloy_sol_types::SolValue;
 use revm::{
     primitives::{address, keccak256, ruint::Uint, AccountInfo, Address, Bytecode, Bytes, U256},
     InMemoryDB,
 };
-use alloy_core::hex;
 
 fn compile_runtime(path: &str) -> eyre::Result<Vec<u8>> {
     println!("Compiling runtime: {}", path);
@@ -244,7 +244,7 @@ fn test_transfer_logs() -> eyre::Result<()> {
     let mut calldata_mint = (alice, 100u64).abi_encode();
     let mut complete_mint_calldata = selector_mint.to_vec();
     complete_mint_calldata.append(&mut calldata_mint);
-    
+
     let mint_result = run_tx(&mut db, &CONTRACT_ADDR, complete_mint_calldata)?;
     println!("Mint result status: {}", mint_result.status);
 
@@ -258,9 +258,9 @@ fn test_transfer_logs() -> eyre::Result<()> {
     let mut calldata_transfer = (bob, 50u64).abi_encode();
     let mut complete_transfer_calldata = selector_transfer.to_vec();
     complete_transfer_calldata.append(&mut calldata_transfer);
-    
+
     let transfer_result = run_tx(&mut db, &CONTRACT_ADDR, complete_transfer_calldata)?;
-    
+
     println!("\nActual Transfer Log:");
     if let Some(log) = transfer_result.logs.first() {
         let topics = log.data.topics();
@@ -270,10 +270,9 @@ fn test_transfer_logs() -> eyre::Result<()> {
         let amount = u64::from_be_bytes(log.data.data[24..32].try_into().unwrap());
         println!("- Amount: {} tokens", amount);
     }
-    
+
     Ok(())
 }
-
 
 fn main() -> eyre::Result<()> {
     test_runtime_from_binary()?;

@@ -6,7 +6,7 @@ use core::default::Default;
 use contract_derive::{contract, payable, Event};
 use eth_riscv_runtime::types::Mapping;
 
-use alloy_core::primitives::{Address, address, U256};
+use alloy_core::primitives::{address, Address, U256};
 
 extern crate alloc;
 use alloc::string::String;
@@ -27,7 +27,7 @@ pub struct Transfer {
     pub from: Address,
     #[indexed]
     pub to: Address,
-    pub value: u64
+    pub value: u64,
 }
 
 #[derive(Event)]
@@ -36,7 +36,7 @@ pub struct Mint {
     pub from: Address,
     #[indexed]
     pub to: Address,
-    pub value: u64
+    pub value: u64,
 }
 
 #[contract]
@@ -72,7 +72,9 @@ impl ERC20 {
         let sender_balance = self.balances.read(sender);
         let recipient_balance = self.balances.read(recipient);
 
-        self.allowances.read(sender).write(msg_sender(), allowance - amount);
+        self.allowances
+            .read(sender)
+            .write(msg_sender(), allowance - amount);
         self.balances.write(sender, sender_balance - amount);
         self.balances.write(recipient, recipient_balance + amount);
 
