@@ -62,7 +62,7 @@ mod tests {
         let runtime_path = "../asm-runtime-example/runtime";
 
         // Check if the runtime ELF exists; if not, run `make` to generate it
-        if !fs::metadata(runtime_path).is_ok() {
+        if fs::metadata(runtime_path).is_err() {
             let status = Command::new("make")
                 .current_dir("../asm-runtime-example")
                 .status()?;

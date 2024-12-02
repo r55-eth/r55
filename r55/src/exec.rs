@@ -61,7 +61,7 @@ pub fn run_tx(db: &mut InMemoryDB, addr: &Address, calldata: Vec<u8>) -> Result<
 
     match result {
         ExecutionResult::Success {
-            reason,
+            reason: _,
             gas_used,
             gas_refunded: _,
             logs,
@@ -414,24 +414,24 @@ fn execute_riscv(
                         let topics_size: u64 = emu.cpu.xregs.read(13);
 
                         // Read data
-                        let data_slice =
-                            match emu.cpu.bus.get_dram_slice(data_ptr..(data_ptr + data_size)) {
-                                Ok(slice) => slice,
-                                Err(_) => &mut [],
-                            };
+                        let data_slice = emu
+                            .cpu
+                            .bus
+                            .get_dram_slice(data_ptr..(data_ptr + data_size))
+                            .unwrap_or(&mut []);
                         let data = data_slice.to_vec();
 
                         // Read topics
                         let topics_start = topics_ptr;
                         let topics_end = topics_ptr + topics_size * 32;
-                        let topics_slice =
-                            match emu.cpu.bus.get_dram_slice(topics_start..topics_end) {
-                                Ok(slice) => slice,
-                                Err(_) => &mut [],
-                            };
+                        let topics_slice = emu
+                            .cpu
+                            .bus
+                            .get_dram_slice(topics_start..topics_end)
+                            .unwrap_or(&mut []);
                         let topics = topics_slice
                             .chunks(32)
-                            .map(|chunk| B256::from_slice(chunk))
+                            .map(B256::from_slice)
                             .collect::<Vec<B256>>();
 
                         host.log(Log::new_unchecked(

@@ -163,7 +163,7 @@ mod tests {
 
         // Mint 42 tokens to Alice
         let mint_result = run_tx(&mut db, &CONTRACT_ADDR, complete_calldata_mint.clone()).unwrap();
-        assert_eq!(mint_result.status, true, "Mint transaction failed");
+        assert!(mint_result.status, "Mint transaction failed");
 
         // Check Alice's balance
         let alice_balance = run_tx(
@@ -181,7 +181,7 @@ mod tests {
         // Transfer 21 tokens from Alice to Bob
         let transfer_result =
             run_tx(&mut db, &CONTRACT_ADDR, complete_calldata_transfer.clone()).unwrap();
-        assert_eq!(transfer_result.status, true, "Transfer transaction failed");
+        assert!(transfer_result.status, "Transfer transaction failed");
 
         // Check Alice's and Bob's balance
         let alice_balance = run_tx(
@@ -198,7 +198,7 @@ mod tests {
         // Approve Carol to spend 21 token from Alice
         let approve_result =
             run_tx(&mut db, &CONTRACT_ADDR, complete_calldata_approve.clone()).unwrap();
-        assert_eq!(approve_result.status, true, "Approve transaction failed");
+        assert!(approve_result.status, "Approve transaction failed");
 
         // Check Carol's allowance
         let allowance_res =
@@ -231,7 +231,7 @@ mod tests {
         complete_mint_calldata.append(&mut calldata_mint);
 
         let mint_result = run_tx(&mut db, &CONTRACT_ADDR, complete_mint_calldata).unwrap();
-        assert_eq!(mint_result.status, true, "Mint transaction failed");
+        assert!(mint_result.status, "Mint transaction failed");
 
         // Transfer tokens from Alice to Bob
         let selector_transfer = get_selector_from_sig("transfer");
@@ -243,7 +243,7 @@ mod tests {
 
         // Assert the transfer log
         assert!(
-            transfer_result.logs.len() > 0,
+            !transfer_result.logs.is_empty(),
             "No logs found in transfer transaction"
         );
         let log = &transfer_result.logs[0];
@@ -252,8 +252,8 @@ mod tests {
         // Expected event hash for Transfer event
         let expected_event_hash = keccak256("Transfer(address,address,uint64)");
         assert_eq!(
-            hex::encode(&topics[0]),
-            hex::encode(&expected_event_hash),
+            hex::encode(topics[0]),
+            hex::encode(expected_event_hash),
             "Incorrect event hash"
         );
 
