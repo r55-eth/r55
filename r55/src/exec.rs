@@ -8,7 +8,7 @@ use revm::{
         CallInputs, CallScheme, CallValue, Host, InstructionResult, Interpreter, InterpreterAction,
         InterpreterResult, SharedMemory,
     },
-    primitives::{address, Address, Bytes, ExecutionResult, Output, TransactTo, U256, B256, Log},
+    primitives::{address, Address, Bytes, ExecutionResult, Log, Output, TransactTo, B256, U256},
     Database, Evm, Frame, FrameOrResult, InMemoryDB,
 };
 use rvemu::{emulator::Emulator, exception::Exception};
@@ -412,26 +412,28 @@ fn execute_riscv(
                         let data_size: u64 = emu.cpu.xregs.read(11);
                         let topics_ptr: u64 = emu.cpu.xregs.read(12);
                         let topics_size: u64 = emu.cpu.xregs.read(13);
-                    
+
                         // Read data
-                        let data_slice = match emu.cpu.bus.get_dram_slice(data_ptr..(data_ptr + data_size)) {
-                            Ok(slice) => slice,
-                            Err(_) => &mut[],
-                        };
+                        let data_slice =
+                            match emu.cpu.bus.get_dram_slice(data_ptr..(data_ptr + data_size)) {
+                                Ok(slice) => slice,
+                                Err(_) => &mut [],
+                            };
                         let data = data_slice.to_vec();
-                    
+
                         // Read topics
                         let topics_start = topics_ptr;
                         let topics_end = topics_ptr + topics_size * 32;
-                        let topics_slice = match emu.cpu.bus.get_dram_slice(topics_start..topics_end) {
-                            Ok(slice) => slice,
-                            Err(_) => &mut[], 
-                        };
+                        let topics_slice =
+                            match emu.cpu.bus.get_dram_slice(topics_start..topics_end) {
+                                Ok(slice) => slice,
+                                Err(_) => &mut [],
+                            };
                         let topics = topics_slice
                             .chunks(32)
                             .map(|chunk| B256::from_slice(chunk))
                             .collect::<Vec<B256>>();
-                    
+
                         host.log(Log::new_unchecked(
                             interpreter.contract.target_address,
                             topics,
