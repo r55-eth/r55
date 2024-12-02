@@ -17,5 +17,7 @@ repository = "https://github.com/leonardoalt/r5"
 eth-riscv-interpreter = { path = "eth-riscv-interpreter" }
 eth-riscv-syscalls = { path = "eth-riscv-syscalls" }
 
+env_logger = "0.11.5"
 eyre = "0.6.12"
+log = "0.4.22"
 thiserror = "2.0.3"
