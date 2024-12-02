@@ -486,7 +486,7 @@ fn r55_gas_used(inst_count: &BTreeMap<String, u64>) -> u64 {
 
     // This is the minimum 'gas used' to ABI decode 'empty' calldata into Rust type arguments. Real calldata will take more gas.
     // Internalising this would focus gas metering more on the function logic
-    let base_cost = 9_175_538;
+    let abi_decode_cost = 9_175_538;
 
-    total_cost - base_cost
+    total_cost - abi_decode_cost
 }
