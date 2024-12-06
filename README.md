@@ -88,9 +88,9 @@ Nothing has to be changed in how transactions are handled or created.
 # Relevant Links
 
 - [revm-R55](https://github.com/r0qs/revm)
-- [rvemu-R55](https://github.com/lvella/rvemu)
-- [R55 Ethereum Runtime](https://github.com/leonardoalt/r55/tree/main/eth-riscv-runtime)
-- [R55 Compiler](https://github.com/leonardoalt/r55/tree/main/r55)
+- [rvemu-R55](https://github.com/r55-eth/rvemu)
+- [R55 Ethereum Runtime](https://github.com/r55-eth/r55/tree/main/eth-riscv-runtime)
+- [R55 Compiler](https://github.com/r55-eth/r55/tree/main/r55)
 
 # Prerequisites
 
@@ -102,9 +102,9 @@ brew install riscv-gnu-toolchain gettext
 
 # Test
 
-The [R55](https://github.com/leonardoalt/r55/tree/main/r55) crate has a binary
+The [R55](https://github.com/r55-eth/r55/tree/main/r55) crate has an [e2e test](https://github.com/r55-eth/r55/tree/main/r55/tests/e2e.rs)
 that puts everything together in an end-to-end PoC, compiling the
-[erc20](https://github.com/leonardoalt/r55/tree/main/erc20) contract, deploying
+[erc20](https://github.com/r55-eth/r55/tree/main/erc20) contract, deploying
 it to an internal instance of [revm-r55](https://github.com/r0qs/revm), and
 running two transactions on it, first a `mint` then a `balance_of` check.
 
@@ -117,7 +117,7 @@ $ rustup install nightly-2024-02-01-x86_64-unknown-linux-gnu
 Now run:
 
 ```console
-$ cargo run
+$ cargo test --package r55 --test e2e -- erc20 --exact --show-output
 ...
 Compiling deploy: erc20
 Cargo command completed successfully
@@ -136,11 +136,11 @@ second transaction that indeed the balance is 42 (0x2a).
 # Architecture
 
 The compiler uses `rustc`, `llvm`,
-[eth-riscv-syscalls](https://github.com/leonardoalt/r55/tree/main/eth-riscv-syscalls),
-[eth-riscv-runtime](https://github.com/leonardoalt/r55/tree/main/eth-riscv-runtime)
+[eth-riscv-syscalls](https://github.com/r55-eth/r55/tree/main/eth-riscv-syscalls),
+[eth-riscv-runtime](https://github.com/r55-eth/r55/tree/main/eth-riscv-runtime)
 and [riscv-rt](https://github.com/rust-embedded/riscv/tree/master/riscv-rt) to
 compile and link ELF binaries with low-level syscalls to be executed by
-[rvemu-r55](https://github.com/lvella/rvemu):
+[rvemu-r55](https://github.com/r55-eth/rvemu):
 
 ```mermaid
 graph TD;
@@ -157,9 +157,9 @@ graph TD;
 ```
 
 The execution environment depends on [revm](https://github.com/bluealloy/revm),
-and relies on the [rvemu-r55](https://github.com/lvella/rvemu) RISCV
+and relies on the [rvemu-r55](https://github.com/r55-eth/rvemu) RISCV
 interpreter and
-[eth-riscv-runtime](https://github.com/leonardoalt/r55/tree/main/eth-riscv-runtime).
+[eth-riscv-runtime](https://github.com/r55-eth/r55/tree/main/eth-riscv-runtime).
 
 ```mermaid
 graph TD;
