@@ -23,7 +23,7 @@ pub enum Error<DB: Database = InMemoryDB>
 where
     DB::Error: std::error::Error + 'static,
 {
-    /// The exception kind on RISC-V [`emulator`](`Emulator`)
+    /// The exception kind on RISC-V emulator
     #[error("Got RISC-V emulator exception: {0:?}")]
     RvEmuException(Exception),
     /// EVM error

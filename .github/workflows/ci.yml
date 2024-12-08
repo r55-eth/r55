@@ -1,0 +1,151 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+env:
+  CARGO_TERM_COLOR: always
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.head_ref || github.run_id }}
+  cancel-in-progress: true
+
+jobs:
+  # TODO(fakedev9999): Add miri tests
+
+  test:
+    name: test ${{ matrix.os }} ${{ matrix.rust }} ${{ matrix.flags }}
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        # TODO(fakedev9999): Add Windows tests
+        # See https://github.com/alloy-rs/core/blob/dc0de77b3f8da2983a0a14f4b695e740c1ffaf8f/.github/workflows/ci.yml#L23
+        os: ["ubuntu-latest"]
+        rust: [
+            "stable",
+            "nightly",
+            # TODO(fakedev9999): Add MSRV tests when the MSRV is fixed
+            # See https://github.com/alloy-rs/core/blob/f65c915c41877576e38c99df8edd2de71ae46aa5/.github/workflows/ci.yml#L27
+          ]
+        flags: [
+            # No features
+            "--no-default-features",
+            # Default features
+            "",
+          ]
+        include:
+          # TODO(fakedev9999): Add MSRV tests when the MSRV is fixed
+          # See https://github.com/alloy-rs/core/blob/f65c915c41877576e38c99df8edd2de71ae46aa5/.github/workflows/ci.yml#L36-L42
+          # All features
+          - os: "ubuntu-latest"
+            rust: "nightly"
+            flags: "--all-features"
+          # TODO(fakedev9999): Add Windows tests
+          # See https://github.com/alloy-rs/core/blob/dc0de77b3f8da2983a0a14f4b695e740c1ffaf8f/.github/workflows/ci.yml#L47-L49
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: ${{ matrix.rust }}
+      - uses: Swatinem/rust-cache@v2
+        with:
+          cache-on-failure: true
+      - name: Install Dependencies
+        if: ${{ matrix.os == 'ubuntu-latest' }}
+        run: |
+          rustup install nightly-2024-02-01-x86_64-unknown-linux-gnu
+          rustup component add rust-src --toolchain nightly-2024-02-01-x86_64-unknown-linux-gnu
+          sudo apt-get update
+          sudo apt-get install -y gcc-riscv64-unknown-elf make
+
+      # Only run tests on latest stable and above
+      - name: build
+        if: ${{ matrix.rust == '1.81' }} # MSRV
+        run: cargo build --workspace ${{ matrix.flags }}
+      - name: test
+        if: ${{ matrix.rust != '1.81' }} # MSRV
+        run: cargo test --workspace ${{ matrix.flags }}
+
+  # TODO(fakedev9999): Add wasm tests if needed
+
+  feature-checks:
+    name: features ${{ matrix.rust }} ${{ matrix.flags }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        rust: ["stable", "nightly"]
+        flags: ["", "--all-targets"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: ${{ matrix.rust }}
+      - uses: taiki-e/install-action@cargo-hack
+      - uses: Swatinem/rust-cache@v2
+        with:
+          cache-on-failure: true
+      - name: cargo hack
+        run: |
+          args=(${{ matrix.flags }})
+          [ ${{ matrix.rust }} == "stable" ] && args+=(--skip nightly)
+          ./scripts/check_features.sh "${args[@]}"
+
+  clippy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@nightly
+        with:
+          components: clippy
+      - uses: Swatinem/rust-cache@v2
+        with:
+          cache-on-failure: true
+      - run: cargo clippy --workspace --all-targets --all-features -- -D warnings
+        env:
+          RUSTFLAGS: -D warnings
+
+  docs:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@nightly
+      - uses: Swatinem/rust-cache@v2
+        with:
+          cache-on-failure: true
+      - run: cargo doc --workspace --all-features --no-deps --document-private-items
+        env:
+          RUSTDOCFLAGS: "--cfg docsrs -D warnings"
+
+  fmt:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@nightly
+        with:
+          components: rustfmt
+      - run: cargo fmt --all --check
+
+  ci-success:
+    name: ci success
+    runs-on: ubuntu-latest
+    if: always()
+    needs:
+      - test
+      - feature-checks
+      - clippy
+      - docs
+      - fmt
+    steps:
+      - name: Decide whether the needed jobs succeeded or failed
+        uses: re-actors/alls-green@release/v1
+        with:
+          jobs: ${{ toJSON(needs) }}
