@@ -278,10 +278,6 @@ fn is_payable(method: &syn::ImplItemMethod) -> bool {
 
 #[proc_macro_attribute]
 pub fn interface(_attr: TokenStream, item: TokenStream) -> TokenStream {
-    // DEBUG
-    println!("\n=== Input Trait ===");
-    println!("{}", item.to_string());
-
     let input = parse_macro_input!(item as ItemTrait);
     let trait_name = &input.ident;
 
@@ -295,12 +291,6 @@ pub fn interface(_attr: TokenStream, item: TokenStream) -> TokenStream {
                     .try_into()
                     .unwrap_or_default();
                 let method_selector = u32::from_be_bytes(selector_bytes);
-
-                // DEBUG
-                println!("\n=== Processing Method ===");
-                println!("Method name: {}", method_name);
-                println!("Selector bytes: {:02x?}", selector_bytes);
-                println!("Selector u32: {}", method_selector);
 
                 // Extract argument types and names, skipping self
                 let arg_types: Vec<_> = method
@@ -404,10 +394,6 @@ pub fn interface(_attr: TokenStream, item: TokenStream) -> TokenStream {
             #(#method_impls)*
         }
     };
-
-    // DEBUG
-    println!("\n=== Generated Code ===");
-    println!("{:#}", expanded.to_string().replace(';', ";\n"));
 
     TokenStream::from(expanded)
 }

@@ -5,15 +5,15 @@ use eth_riscv_syscalls::Syscall;
 use revm::{
     handler::register::EvmHandler,
     interpreter::{
-        CallInputs, CallScheme, CallValue, Gas, Host, InstructionResult, Interpreter,
-        InterpreterAction, InterpreterResult, SharedMemory,
+        CallInputs, CallScheme, CallValue, Host, InstructionResult, Interpreter, InterpreterAction,
+        InterpreterResult, SharedMemory,
     },
     primitives::{address, Address, Bytes, ExecutionResult, Log, Output, TransactTo, B256, U256},
     Database, Evm, Frame, FrameOrResult, InMemoryDB,
 };
 use rvemu::{emulator::Emulator, exception::Exception};
 use std::{collections::BTreeMap, rc::Rc, sync::Arc};
-use tracing::{debug, field::debug, warn};
+use tracing::{debug, warn};
 
 use super::error::{Error, Result, TxResult};
 use super::gas;
