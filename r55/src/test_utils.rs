@@ -8,7 +8,7 @@ static INIT: Once = Once::new();
 
 pub fn initialize_logger() {
     INIT.call_once(|| {
-        let log_level = std::env::var("RUST_LOG").unwrap_or("debug".to_owned());
+        let log_level = std::env::var("RUST_LOG").unwrap_or("INFO".to_owned());
         let tracing_sub = tracing_subscriber::fmt()
             .with_max_level(tracing::Level::DEBUG)
             .with_env_filter(tracing_subscriber::EnvFilter::new(&format!(

@@ -1,5 +1,3 @@
-use tracing::debug;
-
 // Standard EVM operation costs
 pub const SLOAD_COLD: u64 = 2100;
 pub const SLOAD_WARM: u64 = 100;
