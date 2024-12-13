@@ -9,9 +9,10 @@ use alloy_primitives::Bytes;
 use std::fs::File;
 use std::io::Read;
 use std::process::Command;
+use tracing::{error, info};
 
 fn compile_runtime(path: &str) -> eyre::Result<Vec<u8>> {
-    log::info!("Compiling runtime: {}", path);
+    info!("Compiling runtime: {}", path);
     let status = Command::new("cargo")
         .arg("+nightly-2024-02-01")
         .arg("build")
@@ -28,10 +29,10 @@ fn compile_runtime(path: &str) -> eyre::Result<Vec<u8>> {
         .expect("Failed to execute cargo command");
 
     if !status.success() {
-        log::error!("Cargo command failed with status: {}", status);
+        error!("Cargo command failed with status: {}", status);
         std::process::exit(1);
     } else {
-        log::info!("Cargo command completed successfully");
+        info!("Cargo command completed successfully");
     }
 
     let path = format!(
@@ -56,7 +57,7 @@ fn compile_runtime(path: &str) -> eyre::Result<Vec<u8>> {
 
 pub fn compile_deploy(path: &str) -> eyre::Result<Vec<u8>> {
     compile_runtime(path)?;
-    log::info!("Compiling deploy: {}", path);
+    info!("Compiling deploy: {}", path);
     let status = Command::new("cargo")
         .arg("+nightly-2024-02-01")
         .arg("build")
@@ -73,10 +74,10 @@ pub fn compile_deploy(path: &str) -> eyre::Result<Vec<u8>> {
         .expect("Failed to execute cargo command");
 
     if !status.success() {
-        log::error!("Cargo command failed with status: {}", status);
+        error!("Cargo command failed with status: {}", status);
         std::process::exit(1);
     } else {
-        log::info!("Cargo command completed successfully");
+        info!("Cargo command completed successfully");
     }
 
     let path = format!(

@@ -13,6 +13,7 @@ use revm::{
 };
 use rvemu::{emulator::Emulator, exception::Exception};
 use std::{collections::BTreeMap, rc::Rc, sync::Arc};
+use tracing::{debug, field::debug, warn};
 
 use super::error::{Error, Result, TxResult};
 use super::gas;
@@ -38,7 +39,7 @@ pub fn deploy_contract(db: &mut InMemoryDB, bytecode: Bytes) -> Result<Address> 
             output: Output::Create(_value, Some(addr)),
             ..
         } => {
-            println!("Deployed at addr: {:?}", addr);
+            debug!("Deployed at addr: {:?}", addr);
             Ok(addr)
         }
         result => Err(Error::UnexpectedExecResult(result)),
@@ -70,7 +71,7 @@ pub fn run_tx(db: &mut InMemoryDB, addr: &Address, calldata: Vec<u8>) -> Result<
             output: Output::Call(value),
             ..
         } => {
-            println!("Tx result: {:?}", value);
+            debug!("Tx result: {:?}", value);
             Ok(TxResult {
                 output: value.into(),
                 logs,
@@ -91,28 +92,17 @@ struct RVEmu {
 fn riscv_context(frame: &Frame) -> Option<RVEmu> {
     let interpreter = frame.interpreter();
 
-    println!("Creating RISC-V context:");
-    println!("Contract address: {}", interpreter.contract.target_address);
-    println!("Input size: {}", interpreter.contract.input.len());
-
     let Some((0xFF, bytecode)) = interpreter.bytecode.split_first() else {
         return None;
     };
-    println!("RISC-V bytecode size: {}", bytecode.len());
 
     match setup_from_elf(bytecode, &interpreter.contract.input) {
-        Ok(emu) => {
-            println!(
-                "RISC-V emulator setup successfully with entry point: 0x{:x}",
-                emu.cpu.pc
-            );
-            Some(RVEmu {
-                emu,
-                returned_data_destiny: None,
-            })
-        }
+        Ok(emu) => Some(RVEmu {
+            emu,
+            returned_data_destiny: None,
+        }),
         Err(err) => {
-            println!("Failed to setup from ELF: {err}");
+            warn!("Failed to setup from ELF: {err}");
             None
         }
     }
@@ -127,15 +117,7 @@ pub fn handle_register<EXT, DB: Database>(handler: &mut EvmHandler<'_, EXT, DB>)
     handler.execution.call = Arc::new(move |ctx, inputs| {
         let result = old_handle(ctx, inputs);
         if let Ok(FrameOrResult::Frame(frame)) = &result {
-            println!("----");
-            println!("Frame created successfully");
-            println!("Contract: {}", frame.interpreter().contract.target_address);
-            println!("Code size: {}", frame.interpreter().bytecode.len());
-
             let context = riscv_context(frame);
-            println!("RISC-V context created: {}", context.is_some());
-            println!("----");
-
             call_stack_inner.borrow_mut().push(context);
         }
         result
@@ -156,33 +138,35 @@ pub fn handle_register<EXT, DB: Database>(handler: &mut EvmHandler<'_, EXT, DB>)
     let old_handle = handler.execution.execute_frame.clone();
     handler.execution.execute_frame = Arc::new(move |frame, memory, instraction_table, ctx| {
         let depth = call_stack.borrow().len() - 1;
+        // use last frame as stack is FIFO
         let mut result = if let Some(Some(riscv_context)) = call_stack.borrow_mut().last_mut() {
-            println!(
-                "\n*[{}] RISC-V Emu Handler (with PC: 0x{:x})",
-                depth, riscv_context.emu.cpu.pc
+            debug!(
+                "=== [FRAME-{}] Contract: {} ============-",
+                depth,
+                frame.interpreter().contract.target_address,
             );
-
             execute_riscv(riscv_context, frame.interpreter_mut(), memory, ctx)?
         } else {
-            println!("\n*[OLD Handler]");
+            debug!("=== [OLD Handler] ==================--");
             old_handle(frame, memory, instraction_table, ctx)?
         };
 
-        // if it is return pop the stack.
+        // if action is return, pop the stack.
         if result.is_return() {
-            println!("=== RETURN Frame ===");
             call_stack.borrow_mut().pop();
-            println!(
-                "Popped frame from stack. Remaining frames: {}",
-                call_stack.borrow().len()
+
+            let is_last = call_stack.borrow().is_empty();
+            debug!(
+                "=== [FRAME-{}] Ouput: RETURN {}",
+                depth,
+                if is_last { "(last)" } else { "" }
             );
 
-            // if cross-contract call, copy return data into memory range expected by the parent
-            if !call_stack.borrow().is_empty() {
+            if !is_last {
                 if let Some(Some(parent)) = call_stack.borrow_mut().last_mut() {
                     if let Some(return_range) = &parent.returned_data_destiny {
                         if let InterpreterAction::Return { result: res } = &mut result {
-                            // Get allocated memory slice
+                            // get allocated memory slice
                             let return_memory = parent
                                 .emu
                                 .cpu
@@ -190,21 +174,22 @@ pub fn handle_register<EXT, DB: Database>(handler: &mut EvmHandler<'_, EXT, DB>)
                                 .get_dram_slice(return_range.clone())
                                 .expect("unable to get memory from return range");
 
-                            println!("Return data: {:?}", res.output);
-                            println!("Memory range: {:?}", return_range);
-                            println!("Memory size: {}", return_memory.len());
+                            debug!("- Return data: {:?}", res.output);
+                            debug!("- Memory range: {:?}", return_range);
+                            debug!("- Memory size: {}", return_memory.len());
 
-                            // Write return data to parent's memory
+                            // write return data to parent's memory
                             if res.output.len() == return_memory.len() {
-                                println!("Copying output to memory");
                                 return_memory.copy_from_slice(&res.output);
+                            } else {
+                                warn!("Unexpected output size!")
                             }
                         }
                     }
                 }
             }
         }
-        println!("Frame({}) Gas: {:#?}", depth, frame.interpreter().gas);
+        debug!("=== [Frame-{}] {:#?}", depth, frame.interpreter().gas);
 
         Ok(result)
     });
@@ -216,15 +201,14 @@ fn execute_riscv(
     shared_memory: &mut SharedMemory,
     host: &mut dyn Host,
 ) -> Result<InterpreterAction> {
-    println!(
-        "{} RISC-V execution:\n  PC: {:#x}\n  Contract: {}\n  Return data dst: {:#?}",
+    debug!(
+        "{} RISC-V execution:  PC: {:#x}  Return data dst: {:#?}",
         if rvemu.emu.cpu.pc == 0x80300000 {
             "Starting"
         } else {
             "Resuming"
         },
         rvemu.emu.cpu.pc,
-        interpreter.contract.target_address,
         &rvemu.returned_data_destiny
     );
 
@@ -237,7 +221,7 @@ fn execute_riscv(
         if shared_memory.len() >= data.len() {
             data.copy_from_slice(shared_memory.slice(0, data.len()));
         }
-        println!("Loaded return data: {}", Bytes::copy_from_slice(data));
+        debug!("Loaded return data: {}", Bytes::copy_from_slice(data));
     }
 
     let return_revert = |interpreter: &mut Interpreter, gas_used: u64| {
@@ -260,10 +244,10 @@ fn execute_riscv(
                 let t0: u64 = emu.cpu.xregs.read(5);
 
                 let Ok(syscall) = Syscall::try_from(t0 as u8) else {
-                    println!("Unhandled syscall: {:?}", t0);
+                    warn!("Unhandled syscall: {:?}", t0);
                     return return_revert(interpreter, interpreter.gas.spent());
                 };
-                println!("> [Syscall::{} - {:#04x}]", syscall, t0);
+                debug!("[Syscall::{} - {:#04x}]", syscall, t0);
 
                 match syscall {
                     Syscall::Return => {
@@ -271,14 +255,13 @@ fn execute_riscv(
                         let ret_size: u64 = emu.cpu.xregs.read(11);
 
                         let r55_gas = r55_gas_used(&emu.cpu.inst_counter);
-                        println!("> total R55 gas: {}", r55_gas);
+                        debug!("> total R55 gas: {}", r55_gas);
 
                         // RETURN logs the gas of the whole risc-v instruction set
                         syscall_gas!(interpreter, r55_gas);
 
                         let data_bytes = dram_slice(emu, ret_offset, ret_size)?;
 
-                        println!("interpreter remaining gas: {}", interpreter.gas.remaining());
                         return Ok(InterpreterAction::Return {
                             result: InterpreterResult {
                                 result: InstructionResult::Return,
@@ -289,14 +272,14 @@ fn execute_riscv(
                     }
                     Syscall::SLoad => {
                         let key: u64 = emu.cpu.xregs.read(10);
-                        println!(
-                            "SLOAD ({}) - Key: {}",
+                        debug!(
+                            "> SLOAD ({}) - Key: {}",
                             interpreter.contract.target_address, key
                         );
                         match host.sload(interpreter.contract.target_address, U256::from(key)) {
                             Some((value, is_cold)) => {
-                                println!(
-                                    "SLOAD ({}) - Value: {}",
+                                debug!(
+                                    "> SLOAD ({}) - Value: {}",
                                     interpreter.contract.target_address, value
                                 );
                                 let limbs = value.as_limbs();
@@ -361,8 +344,8 @@ fn execute_riscv(
                         // Store where return data should go
                         let ret_offset = emu.cpu.xregs.read(16);
                         let ret_size = emu.cpu.xregs.read(17);
-                        println!(
-                            "Return data will be written to: {}..{}",
+                        debug!(
+                            "> Return data will be written to: {}..{}",
                             ret_offset,
                             ret_offset + ret_size
                         );
@@ -396,11 +379,11 @@ fn execute_riscv(
                         let call_gas_limit = interpreter.gas.remaining();
                         syscall_gas!(interpreter, call_gas_limit);
 
-                        println!("Call context:");
-                        println!("  Caller: {}", interpreter.contract.target_address);
-                        println!("  Target Address: {}", addr);
-                        println!("  Value: {}", value);
-                        println!("  Calldata: {:?}", calldata);
+                        debug!("> Call context:");
+                        debug!("  - Caller: {}", interpreter.contract.target_address);
+                        debug!("  - Target Address: {}", addr);
+                        debug!("  - Value: {}", value);
+                        debug!("  - Calldata: {:?}", calldata);
                         return Ok(InterpreterAction::Call {
                             inputs: Box::new(CallInputs {
                                 input: calldata,
@@ -567,11 +550,11 @@ fn execute_riscv(
                 }
             }
             Ok(_) => {
-                println!("Successful instruction at PC: {:#x}", emu.cpu.pc);
+                debug!("Successful instruction at PC: {:#x}", emu.cpu.pc);
                 continue;
             }
             Err(e) => {
-                println!("Execution error: {:#?}", e);
+                debug!("Execution error: {:#?}", e);
                 syscall_gas!(interpreter, r55_gas_used(&emu.cpu.inst_counter));
                 return return_revert(interpreter, interpreter.gas.spent());
             }

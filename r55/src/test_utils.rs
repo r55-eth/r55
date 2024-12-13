@@ -8,7 +8,18 @@ static INIT: Once = Once::new();
 
 pub fn initialize_logger() {
     INIT.call_once(|| {
-        env_logger::builder().is_test(true).try_init().unwrap();
+        let log_level = std::env::var("RUST_LOG").unwrap_or("debug".to_owned());
+        let tracing_sub = tracing_subscriber::fmt()
+            .with_max_level(tracing::Level::DEBUG)
+            .with_env_filter(tracing_subscriber::EnvFilter::new(&format!(
+                "{}",
+                log_level
+            )))
+            .with_target(false)
+            // .without_time()
+            .finish();
+        tracing::subscriber::set_global_default(tracing_sub)
+            .expect("Setting tracing subscriber failed");
     });
 }
 

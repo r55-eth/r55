@@ -1,5 +1,7 @@
 //! R55 crate errors
 
+use core::fmt;
+
 use revm::{
     primitives::{EVMError, ExecutionResult, Log},
     Database, InMemoryDB,
@@ -62,5 +64,18 @@ impl<E> From<Error> for EVMError<E> {
     #[inline]
     fn from(err: Error) -> Self {
         EVMError::Custom(err.to_string())
+    }
+}
+
+impl fmt::Display for TxResult {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "Tx Result:\n> success: {}\n> gas used: {}\n> outcome: {}\n> logs: {:#?}\n",
+            self.status,
+            self.gas_used,
+            revm::primitives::Bytes::from(self.output.clone()),
+            self.logs,
+        )
     }
 }

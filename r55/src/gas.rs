@@ -1,3 +1,5 @@
+use tracing::debug;
+
 // Standard EVM operation costs
 pub const SLOAD_COLD: u64 = 2100;
 pub const SLOAD_WARM: u64 = 100;
@@ -15,14 +17,12 @@ pub const CALL_BASE: u64 = 100;
 #[macro_export]
 macro_rules! syscall_gas {
     ($interpreter:expr, $gas_cost:expr $(,)?) => {{
-        let remaining_before = $interpreter.gas.remaining();
         let gas_cost = $gas_cost;
 
-        println!("> About to log gas costs:");
-        println!("  - Operation cost: {}", gas_cost);
-        println!("  - Gas remaining: {}", remaining_before);
-        println!("  - Gas limit: {}", $interpreter.gas.limit());
-        println!("  - Gas spent: {}", $interpreter.gas.spent());
+        debug!("> About to record gas costs:");
+        debug!("  - Gas limit: {}", $interpreter.gas.limit());
+        debug!("  - Gas prev spent: {}", $interpreter.gas.spent());
+        debug!("  - Operation cost: {}", gas_cost);
 
         if !$interpreter.gas.record_cost(gas_cost) {
             eprintln!("OUT OF GAS");
@@ -35,8 +35,8 @@ macro_rules! syscall_gas {
             });
         }
 
-        println!("> Gas recorded successfully:");
-        println!("  - Gas remaining: {}", remaining_before);
-        println!("  - Gas spent: {}", $interpreter.gas.spent());
+        debug!("> Gas recorded successfully:");
+        debug!("  - Gas remaining: {}", $interpreter.gas.remaining());
+        debug!("  - Gas spent: {}", $interpreter.gas.spent());
     }};
 }

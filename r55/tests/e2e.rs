@@ -9,6 +9,7 @@ use revm::{
     primitives::{address, Address},
     InMemoryDB,
 };
+use tracing::{debug, error, info};
 
 const ERC20_PATH: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/../erc20");
 
@@ -42,31 +43,39 @@ fn erc20() {
     let mut complete_calldata_x_balance = selector_x_balance.to_vec();
     complete_calldata_x_balance.append(&mut calldata_x_balance);
 
-    println!("\n----------------------------------------------------------");
-    println!("-- MINT TX -----------------------------------------------");
-    println!("----------------------------------------------------------");
-    println!(
-        " > TX Calldata: {:#?\n}",
+    info!("----------------------------------------------------------");
+    info!("-- MINT TX -----------------------------------------------");
+    info!("----------------------------------------------------------");
+    debug!(
+        "Tx Calldata:\n> {:#?}",
         Bytes::from(complete_calldata_mint.clone())
     );
-    run_tx(&mut db, &addr1, complete_calldata_mint.clone()).unwrap();
-    println!("\n----------------------------------------------------------");
-    println!("-- BALANCE OF TX -----------------------------------------");
-    println!("----------------------------------------------------------");
-    println!(
-        " > TX Calldata: {:#?}\n",
+    match run_tx(&mut db, &addr1, complete_calldata_mint.clone()) {
+        Ok(res) => info!("Success! {}", res),
+        Err(e) => error!("Error when executing tx! {:#?}", e),
+    };
+
+    info!("----------------------------------------------------------");
+    info!("-- BALANCE OF TX -----------------------------------------");
+    info!("----------------------------------------------------------");
+    debug!(
+        "Tx Calldata:\n> {:#?}",
         Bytes::from(complete_calldata_balance.clone())
     );
-    run_tx(&mut db, &addr1, complete_calldata_balance.clone()).unwrap();
-    println!("\n----------------------------------------------------------");
-    println!("-- X-CONTRACT BALANCE OF TX ------------------------------");
-    println!("----------------------------------------------------------");
-    println!(
-        " > TX Calldata: {:#?}\n",
+    match run_tx(&mut db, &addr1, complete_calldata_balance.clone()) {
+        Ok(res) => info!("Success! {}", res),
+        Err(e) => error!("Error when executing tx! {:#?}", e),
+    };
+
+    info!("----------------------------------------------------------");
+    info!("-- X-CONTRACT BALANCE OF TX ------------------------------");
+    info!("----------------------------------------------------------");
+    debug!(
+        "Tx calldata:\n> {:#?}",
         Bytes::from(complete_calldata_x_balance.clone())
     );
     match run_tx(&mut db, &addr2, complete_calldata_x_balance.clone()) {
-        Ok(res) => log::info!("res: {:#?}", res),
-        Err(e) => log::error!("{:#?}", e),
-    };
+        Ok(res) => info!("Success! {}", res),
+        Err(e) => error!("Error when executing tx! {:#?}", e),
+    }
 }

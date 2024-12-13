@@ -929,6 +929,8 @@ use rvemu::{emulator::Emulator, exception::Exception};
 use std::{collections::BTreeMap, rc::Rc, sync::Arc};
 
 use super::error::{Error, Result, TxResult};
+use super::gas;
+use super::syscall_gas;
 
 pub fn deploy_contract(db: &mut InMemoryDB, bytecode: Bytes) -> Result<Address> {
     let mut evm = Evm::builder()
@@ -998,7 +1000,6 @@ pub fn run_tx(db: &mut InMemoryDB, addr: &Address, calldata: Vec<u8>) -> Result<
 struct RVEmu {
     emu: Emulator,
     returned_data_destiny: Option<Range<u64>>,
-    evm_gas: u64,
 }
 
 fn riscv_context(frame: &Frame) -> Option<RVEmu> {
@@ -1022,7 +1023,6 @@ fn riscv_context(frame: &Frame) -> Option<RVEmu> {
             Some(RVEmu {
                 emu,
                 returned_data_destiny: None,
-                evm_gas: 0,
             })
         }
         Err(err) => {
@@ -1113,9 +1113,6 @@ pub fn handle_register<EXT, DB: Database>(handler: &mut EvmHandler<'_, EXT, DB>)
                                 println!("Copying output to memory");
                                 return_memory.copy_from_slice(&res.output);
                             }
-
-                            // Update gas spent
-                            parent.evm_gas += res.gas.spent();
                         }
                     }
                 }
@@ -1143,8 +1140,6 @@ fn execute_riscv(
         interpreter.contract.target_address,
         &rvemu.returned_data_destiny
     );
-
-    println!("interpreter remaining gas: {}", interpreter.gas.remaining());
 
     let emu = &mut rvemu.emu;
     emu.cpu.is_count = true;
@@ -1179,7 +1174,7 @@ fn execute_riscv(
 
                 let Ok(syscall) = Syscall::try_from(t0 as u8) else {
                     println!("Unhandled syscall: {:?}", t0);
-                    return return_revert(interpreter, rvemu.evm_gas);
+                    return return_revert(interpreter, interpreter.gas.spent());
                 };
                 println!("> [Syscall::{} - {:#04x}]", syscall, t0);
 
@@ -1189,24 +1184,12 @@ fn execute_riscv(
                         let ret_size: u64 = emu.cpu.xregs.read(11);
 
                         let r55_gas = r55_gas_used(&emu.cpu.inst_counter);
-                        let data_bytes = dram_slice(emu, ret_offset, ret_size)?;
+                        println!("> total R55 gas: {}", r55_gas);
 
-                        let total_cost = r55_gas + rvemu.evm_gas;
-                        println!(
-                            "evm gas: {}, r55 gas: {}, total cost: {}",
-                            rvemu.evm_gas, r55_gas, total_cost
-                        );
-                        let in_limit = interpreter.gas.record_cost(total_cost);
-                        if !in_limit {
-                            eprintln!("OUT OF GAS");
-                            return Ok(InterpreterAction::Return {
-                                result: InterpreterResult {
-                                    result: InstructionResult::OutOfGas,
-                                    output: Bytes::new(),
-                                    gas: interpreter.gas,
-                                },
-                            });
-                        }
+                        // RETURN logs the gas of the whole risc-v instruction set
+                        syscall_gas!(interpreter, r55_gas);
+
+                        let data_bytes = dram_slice(emu, ret_offset, ret_size)?;
 
                         println!("interpreter remaining gas: {}", interpreter.gas.remaining());
                         return Ok(InterpreterAction::Return {
@@ -1234,14 +1217,17 @@ fn execute_riscv(
                                 emu.cpu.xregs.write(11, limbs[1]);
                                 emu.cpu.xregs.write(12, limbs[2]);
                                 emu.cpu.xregs.write(13, limbs[3]);
-                                if is_cold {
-                                    rvemu.evm_gas += 2100
-                                } else {
-                                    rvemu.evm_gas += 100
-                                }
+                                syscall_gas!(
+                                    interpreter,
+                                    if is_cold {
+                                        gas::SLOAD_COLD
+                                    } else {
+                                        gas::SLOAD_WARM
+                                    }
+                                );
                             }
                             _ => {
-                                return return_revert(interpreter, rvemu.evm_gas);
+                                return return_revert(interpreter, interpreter.gas.spent());
                             }
                         }
                     }
@@ -1257,11 +1243,14 @@ fn execute_riscv(
                             U256::from_limbs([first, second, third, fourth]),
                         );
                         if let Some(result) = result {
-                            if result.is_cold {
-                                rvemu.evm_gas += 2200
-                            } else {
-                                rvemu.evm_gas += 100
-                            }
+                            syscall_gas!(
+                                interpreter,
+                                if result.is_cold {
+                                    gas::SSTORE_COLD
+                                } else {
+                                    gas::SSTORE_WARM
+                                }
+                            );
                         }
                     }
                     Syscall::Call => {
@@ -1300,45 +1289,30 @@ fn execute_riscv(
                         rvemu.returned_data_destiny = Some(ret_offset..(ret_offset + ret_size));
 
                         // Calculate gas for the call
-                        // TODO: Check correctness (tried using evm.codes as refjs)
+                        // TODO: Check correctness (tried using evm.codes as ref but i'm no gas wizard)
                         let (empty_account_cost, addr_access_cost) = match host.load_account(addr) {
                             Some(account) => {
                                 if account.is_cold {
-                                    (0, 2600)
+                                    (0, gas::CALL_NEW_ACCOUNT)
                                 } else {
-                                    (0, 100)
+                                    (0, gas::CALL_BASE)
                                 }
                             }
-                            None => (25000, 2600),
+                            None => (gas::CALL_EMPTY_ACCOUNT, gas::CALL_NEW_ACCOUNT),
                         };
-                        let value_cost = if value != 0 { 9000 } else { 0 };
+                        let value_cost = if value != 0 { gas::CALL_VALUE } else { 0 };
                         let call_gas_cost = empty_account_cost + addr_access_cost + value_cost;
-                        rvemu.evm_gas += call_gas_cost;
-
-                        let r55_gas = r55_gas_used(&emu.cpu.inst_counter);
-                        let total_cost = r55_gas + rvemu.evm_gas;
-                        println!("Gas spent before call: {}", total_cost - call_gas_cost);
-                        println!("Call gas cost {}", call_gas_cost);
-                        // Pass remaining gas to the call
-                        let tx = &host.env().tx;
-                        let remaining_gas = tx.gas_limit.saturating_sub(total_cost);
-                        println!("Remaining gas for call: {}", remaining_gas);
-                        if !interpreter.gas.record_cost(total_cost) {
-                            eprintln!("OUT OF GAS");
-                        };
-                        println!("interpreter remaining gas: {}", interpreter.gas.remaining());
+                        syscall_gas!(interpreter, call_gas_cost);
 
                         println!("Call context:");
                         println!("  Caller: {}", interpreter.contract.target_address);
                         println!("  Target Address: {}", addr);
                         println!("  Value: {}", value);
-                        println!("  Call Gas limit: {}", remaining_gas);
-                        println!("  Tx Gas limit: {}", tx.gas_limit);
                         println!("  Calldata: {:?}", calldata);
                         return Ok(InterpreterAction::Call {
                             inputs: Box::new(CallInputs {
                                 input: calldata,
-                                gas_limit: remaining_gas,
+                                gas_limit: interpreter.gas.remaining(),
                                 target_address: addr,
                                 bytecode_address: addr,
                                 caller: interpreter.contract.target_address,
@@ -1346,7 +1320,7 @@ fn execute_riscv(
                                 scheme: CallScheme::Call,
                                 is_static: false,
                                 is_eof: false,
-                                return_memory_offset: 0..0, // We don't need this anymore
+                                return_memory_offset: 0..0, // handled with `returned_data_destiny`
                             }),
                         });
                     }
@@ -1506,8 +1480,8 @@ fn execute_riscv(
             }
             Err(e) => {
                 println!("Execution error: {:#?}", e);
-                let total_cost = r55_gas_used(&emu.cpu.inst_counter) + rvemu.evm_gas;
-                return return_revert(interpreter, total_cost);
+                syscall_gas!(interpreter, r55_gas_used(&emu.cpu.inst_counter));
+                return return_revert(interpreter, interpreter.gas.spent());
             }
         }
     }
@@ -1554,6 +1528,52 @@ fn r55_gas_used(inst_count: &BTreeMap<String, u64>) -> u64 {
     let abi_decode_cost = 9_175_538;
 
     total_cost - abi_decode_cost
+}
+
+```
+and here the gas helpers used in exec.rs:
+```r55/src/gas.rs
+// Standard EVM operation costs
+pub const SLOAD_COLD: u64 = 2100;
+pub const SLOAD_WARM: u64 = 100;
+pub const SSTORE_COLD: u64 = 2200;
+pub const SSTORE_WARM: u64 = 100;
+
+// Call-related costs
+pub const CALL_EMPTY_ACCOUNT: u64 = 25000;
+pub const CALL_NEW_ACCOUNT: u64 = 2600;
+pub const CALL_VALUE: u64 = 9000;
+pub const CALL_BASE: u64 = 100;
+
+// Macro to handle gas accounting for syscalls.
+// Returns OutOfGas InterpreterResult if gas limit is exceeded.
+#[macro_export]
+macro_rules! syscall_gas {
+    ($interpreter:expr, $gas_cost:expr $(,)?) => {{
+        let remaining_before = $interpreter.gas.remaining();
+        let gas_cost = $gas_cost;
+
+        println!("> About to log gas costs:");
+        println!("  - Operation cost: {}", gas_cost);
+        println!("  - Gas remaining: {}", remaining_before);
+        println!("  - Gas limit: {}", $interpreter.gas.limit());
+        println!("  - Gas spent: {}", $interpreter.gas.spent());
+
+        if !$interpreter.gas.record_cost(gas_cost) {
+            eprintln!("OUT OF GAS");
+            return Ok(InterpreterAction::Return {
+                result: InterpreterResult {
+                    result: InstructionResult::OutOfGas,
+                    output: Bytes::new(),
+                    gas: $interpreter.gas,
+                },
+            });
+        }
+
+        println!("> Gas recorded successfully:");
+        println!("  - Gas remaining: {}", remaining_before);
+        println!("  - Gas spent: {}", $interpreter.gas.spent());
+    }};
 }
 ```
 
@@ -1750,9 +1770,6 @@ it is also worth mentioning that (inside the `handle_register() fn`) i added thi
                                 println!("Copying output to memory");
                                 return_memory.copy_from_slice(&res.output);
                             }
-
-                            // Update gas spent
-                            parent.evm_gas += res.gas.spent();
                         }
                     }
                 }
@@ -1831,8 +1848,8 @@ fn erc20() {
         Bytes::from(complete_calldata_x_balance.clone())
     );
     match run_tx(&mut db, &addr2, complete_calldata_x_balance.clone()) {
-        Ok(res) => log::info!("res: {:#?}", res),
-        Err(e) => log::error!("{:#?}", e),
+        Ok(res) => info!("res: {:#?}", res),
+        Err(e) => error!("{:#?}", e),
     };
 }
 ```
