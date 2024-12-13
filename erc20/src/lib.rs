@@ -3,13 +3,13 @@
 
 use core::default::Default;
 
-use contract_derive::{contract, payable, Event};
+use contract_derive::{contract, interface, payable, Event};
 use eth_riscv_runtime::types::Mapping;
 
 use alloy_core::primitives::{address, Address, U256};
 
 extern crate alloc;
-use alloc::string::String;
+use alloc::{string::String, vec::Vec};
 
 #[derive(Default)]
 pub struct ERC20 {
@@ -19,6 +19,17 @@ pub struct ERC20 {
     name: String,
     symbol: String,
     decimals: u8,
+}
+#[derive(Event)]
+pub struct DebugCalldata {
+    #[indexed]
+    pub target: Address,
+    pub calldata: Vec<u8>,
+}
+
+#[interface]
+trait IERC20 {
+    fn balance_of(&self, owner: Address) -> u64;
 }
 
 #[derive(Event)]
@@ -41,6 +52,14 @@ pub struct Mint {
 
 #[contract]
 impl ERC20 {
+    pub fn x_balance_of(&self, owner: Address, target: Address) -> u64 {
+        let token = IERC20::new(target);
+        match token.balance_of(owner) {
+            Some(balance) => balance,
+            _ => eth_riscv_runtime::revert(),
+        }
+    }
+
     pub fn balance_of(&self, owner: Address) -> u64 {
         self.balances.read(owner)
     }

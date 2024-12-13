@@ -1,6 +1,7 @@
 pub mod exec;
 
 mod error;
+mod gas;
 
 pub mod test_utils;
 
@@ -134,9 +135,9 @@ mod tests {
         let selector_transfer = get_selector_from_sig("transfer");
         let selector_approve = get_selector_from_sig("approve");
         let selector_allowance = get_selector_from_sig("allowance");
-        let alice: Address = address!("0000000000000000000000000000000000000001");
-        let bob: Address = address!("0000000000000000000000000000000000000002");
-        let carol: Address = address!("0000000000000000000000000000000000000003");
+        let alice: Address = address!("000000000000000000000000000000000000000A");
+        let bob: Address = address!("000000000000000000000000000000000000000B");
+        let carol: Address = address!("000000000000000000000000000000000000000C");
         let value_mint: u64 = 42;
         let value_transfer: u64 = 21;
         let mut calldata_alice_balance = alice.abi_encode();
@@ -218,8 +219,8 @@ mod tests {
         add_contract_to_db(&mut db, CONTRACT_ADDR, bytecode);
 
         // Setup addresses
-        let alice: Address = address!("0000000000000000000000000000000000000001");
-        let bob: Address = address!("0000000000000000000000000000000000000002");
+        let alice: Address = address!("000000000000000000000000000000000000000A");
+        let bob: Address = address!("000000000000000000000000000000000000000B");
 
         // Add balance to Alice's account for gas fees
         add_balance_to_db(&mut db, alice, 1e18 as u64);

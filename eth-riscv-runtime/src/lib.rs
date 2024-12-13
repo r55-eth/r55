@@ -2,19 +2,22 @@
 #![no_main]
 #![feature(alloc_error_handler, maybe_uninit_write_slice, round_char_boundary)]
 
-use alloy_core::primitives::{Address, B256, U256};
+use alloy_core::primitives::{Address, Bytes, B256, U256};
 use core::arch::asm;
 use core::panic::PanicInfo;
 use core::slice;
 pub use riscv_rt::entry;
 
 mod alloc;
-pub mod types;
 pub mod block;
 pub mod tx;
+pub mod types;
 
 pub mod log;
 pub use log::{emit_log, Event};
+
+pub mod call;
+pub use call::call_contract;
 
 const CALLDATA_ADDRESS: usize = 0x8000_0000;
 
@@ -66,14 +69,34 @@ pub fn sload(key: u64) -> U256 {
 
 pub fn sstore(key: u64, value: U256) {
     let limbs = value.as_limbs();
-    unsafe {    
+    unsafe {
         asm!("ecall", in("a0") key, in("a1") limbs[0], in("a2") limbs[1], in("a3") limbs[2], in("a4") limbs[3], in("t0") u8::from(Syscall::SStore));
     }
 }
 
-pub fn call(addr: u64, value: u64, in_mem: u64, in_size: u64, out_mem: u64, out_size: u64) {
+pub fn call(
+    addr: Address,
+    value: u64,
+    data_offset: u64,
+    data_size: u64,
+    res_offset: u64,
+    res_size: u64,
+) {
+    let addr: U256 = addr.into_word().into();
+    let addr = addr.as_limbs();
     unsafe {
-        asm!("ecall", in("a0") addr, in("a1") value, in("a2") in_mem, in("a3") in_size, in("a4") out_mem, in("a5") out_size, in("t0") u8::from(Syscall::Call));
+        asm!(
+            "ecall",
+            in("a0") addr[0],
+            in("a1") addr[1],
+            in("a2") addr[2],
+            in("a3") value,
+            in("a4") data_offset,
+            in("a5") data_size,
+            in("a6") res_offset,
+            in("a7") res_size,
+            in("t0") u8::from(Syscall::Call)
+        );
     }
 }
 
@@ -145,7 +168,9 @@ pub fn msg_sig() -> [u8; 4] {
 
 pub fn msg_data() -> &'static [u8] {
     let length = unsafe { slice_from_raw_parts(CALLDATA_ADDRESS, 8) };
-    let length = u64::from_le_bytes([length[0], length[1], length[2], length[3], length[4], length[5], length[6], length[7]]) as usize;
+    let length = u64::from_le_bytes([
+        length[0], length[1], length[2], length[3], length[4], length[5], length[6], length[7],
+    ]) as usize;
     unsafe { slice_from_raw_parts(CALLDATA_ADDRESS + 8, length) }
 }
 
