@@ -3,13 +3,13 @@
 
 use core::default::Default;
 
-use contract_derive::{contract, interface, payable, Event};
+use contract_derive::{contract, payable, Event};
 use eth_riscv_runtime::types::Mapping;
 
 use alloy_core::primitives::{address, Address, U256};
 
 extern crate alloc;
-use alloc::{string::String, vec::Vec};
+use alloc::string::String;
 
 #[derive(Default)]
 pub struct ERC20 {

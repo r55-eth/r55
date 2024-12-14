@@ -138,7 +138,7 @@ pub fn handle_register<EXT, DB: Database>(handler: &mut EvmHandler<'_, EXT, DB>)
     handler.execution.execute_frame = Arc::new(move |frame, memory, instraction_table, ctx| {
         let depth = call_stack.borrow().len() - 1;
 
-        // use last frame as stack is FIFO
+        // use last frame as stack is LIFO
         let mut result = if let Some(Some(riscv_context)) = call_stack.borrow_mut().last_mut() {
             debug!(
                 "=== [FRAME-{}] Contract: {} ============-",
