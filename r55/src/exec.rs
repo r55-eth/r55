@@ -117,8 +117,7 @@ pub fn handle_register<EXT, DB: Database>(handler: &mut EvmHandler<'_, EXT, DB>)
     handler.execution.call = Arc::new(move |ctx, inputs| {
         let result = old_handle(ctx, inputs);
         if let Ok(FrameOrResult::Frame(frame)) = &result {
-            let context = riscv_context(frame);
-            call_stack_inner.borrow_mut().push(context);
+            call_stack_inner.borrow_mut().push(riscv_context(frame));
         }
         result
     });
@@ -138,6 +137,7 @@ pub fn handle_register<EXT, DB: Database>(handler: &mut EvmHandler<'_, EXT, DB>)
     let old_handle = handler.execution.execute_frame.clone();
     handler.execution.execute_frame = Arc::new(move |frame, memory, instraction_table, ctx| {
         let depth = call_stack.borrow().len() - 1;
+
         // use last frame as stack is FIFO
         let mut result = if let Some(Some(riscv_context)) = call_stack.borrow_mut().last_mut() {
             debug!(
@@ -182,7 +182,7 @@ pub fn handle_register<EXT, DB: Database>(handler: &mut EvmHandler<'_, EXT, DB>)
                             if res.output.len() == return_memory.len() {
                                 return_memory.copy_from_slice(&res.output);
                             } else {
-                                warn!("Unexpected output size!")
+                                warn!("Unexpected return data size!");
                             }
                         }
                     }
@@ -198,7 +198,7 @@ pub fn handle_register<EXT, DB: Database>(handler: &mut EvmHandler<'_, EXT, DB>)
 fn execute_riscv(
     rvemu: &mut RVEmu,
     interpreter: &mut Interpreter,
-    shared_memory: &mut SharedMemory,
+    _shared_memory: &mut SharedMemory,
     host: &mut dyn Host,
 ) -> Result<InterpreterAction> {
     debug!(
@@ -218,9 +218,6 @@ fn execute_riscv(
     let returned_data_destiny = &mut rvemu.returned_data_destiny;
     if let Some(destiny) = std::mem::take(returned_data_destiny) {
         let data = emu.cpu.bus.get_dram_slice(destiny)?;
-        if shared_memory.len() >= data.len() {
-            data.copy_from_slice(shared_memory.slice(0, data.len()));
-        }
         debug!("Loaded return data: {}", Bytes::copy_from_slice(data));
     }
 
@@ -255,7 +252,7 @@ fn execute_riscv(
                         let ret_size: u64 = emu.cpu.xregs.read(11);
 
                         let r55_gas = r55_gas_used(&emu.cpu.inst_counter);
-                        debug!("> total R55 gas: {}", r55_gas);
+                        debug!("> Total R55 gas: {}", r55_gas);
 
                         // RETURN logs the gas of the whole risc-v instruction set
                         syscall_gas!(interpreter, r55_gas);

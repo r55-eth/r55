@@ -5,7 +5,7 @@ resolver = "2"
 members = ["eth-riscv-interpreter", "eth-riscv-syscalls", "r55"]
 default-members = ["eth-riscv-interpreter", "eth-riscv-syscalls", "r55"]
 
-exclude = ["contract-derive", "erc20", "eth-riscv-runtime"]
+exclude = ["contract-derive", "erc20", "erc20x", "eth-riscv-runtime"]
 
 [workspace.package]
 version = "0.1.0"

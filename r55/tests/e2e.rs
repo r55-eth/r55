@@ -12,6 +12,7 @@ use revm::{
 use tracing::{debug, error, info};
 
 const ERC20_PATH: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/../erc20");
+const ERC20X_PATH: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/../erc20x");
 
 #[test]
 fn erc20() {
@@ -20,8 +21,9 @@ fn erc20() {
     let mut db = InMemoryDB::default();
 
     let bytecode = compile_with_prefix(compile_deploy, ERC20_PATH).unwrap();
-    let addr1 = deploy_contract(&mut db, bytecode.clone()).unwrap();
-    let addr2 = deploy_contract(&mut db, bytecode).unwrap();
+    let bytecode_x = compile_with_prefix(compile_deploy, ERC20X_PATH).unwrap();
+    let addr1 = deploy_contract(&mut db, bytecode).unwrap();
+    let addr2 = deploy_contract(&mut db, bytecode_x).unwrap();
 
     let selector_balance = get_selector_from_sig("balance_of");
     let selector_x_balance = get_selector_from_sig("x_balance_of");
@@ -52,7 +54,10 @@ fn erc20() {
     );
     match run_tx(&mut db, &addr1, complete_calldata_mint.clone()) {
         Ok(res) => info!("Success! {}", res),
-        Err(e) => error!("Error when executing tx! {:#?}", e),
+        Err(e) => {
+            error!("Error when executing tx! {:#?}", e);
+            panic!()
+        }
     };
 
     info!("----------------------------------------------------------");
@@ -64,7 +69,10 @@ fn erc20() {
     );
     match run_tx(&mut db, &addr1, complete_calldata_balance.clone()) {
         Ok(res) => info!("Success! {}", res),
-        Err(e) => error!("Error when executing tx! {:#?}", e),
+        Err(e) => {
+            error!("Error when executing tx! {:#?}", e);
+            panic!()
+        }
     };
 
     info!("----------------------------------------------------------");
@@ -76,6 +84,9 @@ fn erc20() {
     );
     match run_tx(&mut db, &addr2, complete_calldata_x_balance.clone()) {
         Ok(res) => info!("Success! {}", res),
-        Err(e) => error!("Error when executing tx! {:#?}", e),
+        Err(e) => {
+            error!("Error when executing tx! {:#?}", e);
+            panic!();
+        }
     }
 }

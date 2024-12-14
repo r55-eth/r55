@@ -20,17 +20,6 @@ pub struct ERC20 {
     symbol: String,
     decimals: u8,
 }
-#[derive(Event)]
-pub struct DebugCalldata {
-    #[indexed]
-    pub target: Address,
-    pub calldata: Vec<u8>,
-}
-
-#[interface]
-trait IERC20 {
-    fn balance_of(&self, owner: Address) -> u64;
-}
 
 #[derive(Event)]
 pub struct Transfer {
@@ -52,14 +41,6 @@ pub struct Mint {
 
 #[contract]
 impl ERC20 {
-    pub fn x_balance_of(&self, owner: Address, target: Address) -> u64 {
-        let token = IERC20::new(target);
-        match token.balance_of(owner) {
-            Some(balance) => balance,
-            _ => eth_riscv_runtime::revert(),
-        }
-    }
-
     pub fn balance_of(&self, owner: Address) -> u64 {
         self.balances.read(owner)
     }
