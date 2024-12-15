@@ -6,6 +6,7 @@ edition = "2021"
 [dependencies]
 contract-derive = { path = "../contract-derive" }
 eth-riscv-runtime = { path = "../eth-riscv-runtime" }
+erc20 = { path = "../erc20", features = ["interface-only"] }
 
 alloy-core = { version = "0.7.4", default-features = false }
 alloy-sol-types = { version = "0.7.4", default-features = false }

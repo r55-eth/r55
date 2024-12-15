@@ -1,10 +1,13 @@
 extern crate proc_macro;
 use alloy_core::primitives::keccak256;
-use alloy_sol_types::SolValue;
 use proc_macro::TokenStream;
 use quote::{format_ident, quote};
-use syn::{parse_macro_input, Data, DeriveInput, Fields, ImplItem, ItemImpl, ItemTrait, TraitItem};
-use syn::{FnArg, ReturnType};
+use syn::{
+    parse_macro_input, Data, DeriveInput, Fields, FnArg, ImplItem, ImplItemMethod, ItemImpl,
+    ItemTrait, ReturnType, TraitItem,
+};
+
+mod helpers;
 
 #[proc_macro_derive(Event, attributes(indexed))]
 pub fn event_derive(input: TokenStream) -> TokenStream {
@@ -100,13 +103,13 @@ pub fn contract(_attr: TokenStream, item: TokenStream) -> TokenStream {
         panic!("Expected a struct.");
     };
 
-    let mut public_methods = Vec::new();
+    let mut public_methods: Vec<&ImplItemMethod> = Vec::new();
 
     // Iterate over the items in the impl block to find pub methods
     for item in input.items.iter() {
         if let ImplItem::Method(method) = item {
             if let syn::Visibility::Public(_) = method.vis {
-                public_methods.push(method.clone());
+                public_methods.push(method);
             }
         }
     }
@@ -217,44 +220,64 @@ pub fn contract(_attr: TokenStream, item: TokenStream) -> TokenStream {
         }
     };
 
-    // Generate the call method implementation
-    let call_method = quote! {
-        use alloy_sol_types::SolValue;
-        use eth_riscv_runtime::*;
+    // Generate the interface
+    let interface_name = format_ident!("I{}", struct_name);
+    let interface = helpers::generate_interface(&public_methods, &interface_name);
 
-        #emit_helper
-        impl Contract for #struct_name {
-            fn call(&self) {
-                self.call_with_data(&msg_data());
-            }
+    // Generate the complete output with module structure
+    let output = quote! {
+        // Public interface module
+        pub mod interface {
+            use super::*;
+            #interface
+        }
 
-            fn call_with_data(&self, calldata: &[u8]) {
-                let selector = u32::from_be_bytes([calldata[0], calldata[1], calldata[2], calldata[3]]);
-                let calldata = &calldata[4..];
+        // Generate the call method implementation privately + only when necessarys
+        #[cfg(not(feature = "interface-only"))]
+        mod implementation {
+            use super::*;
+            use alloy_sol_types::SolValue;
+            use eth_riscv_runtime::*;
 
-                match selector {
-                    #( #match_arms )*
-                    _ => revert(),
+            #input
+
+            #emit_helper
+
+            impl Contract for #struct_name {
+                fn call(&self) {
+                    self.call_with_data(&msg_data());
                 }
 
-                return_riscv(0, 0);
+                fn call_with_data(&self, calldata: &[u8]) {
+                    let selector = u32::from_be_bytes([calldata[0], calldata[1], calldata[2], calldata[3]]);
+                    let calldata = &calldata[4..];
+
+                    match selector {
+                        #( #match_arms )*
+                        _ => revert(),
+                    }
+
+                    return_riscv(0, 0);
+                }
+            }
+
+            #[eth_riscv_runtime::entry]
+            fn main() -> ! {
+                let contract = #struct_name::default();
+                contract.call();
+                eth_riscv_runtime::return_riscv(0, 0)
             }
         }
 
-        #[eth_riscv_runtime::entry]
-        fn main() -> !
-        {
-            let contract = #struct_name::default();
-            contract.call();
-            eth_riscv_runtime::return_riscv(0, 0)
-        }
+        // Always export the interface
+        pub use interface::*;
+
+        // Only export contract impl when not in `interface-only` mode
+        #[cfg(not(feature = "interface-only"))]
+        pub use implementation::*;
     };
 
-    let output = quote! {
-        #input
-        #call_method
-    };
-
+    // Convert the output to TokenStream
     TokenStream::from(output)
 }
 
@@ -281,119 +304,24 @@ pub fn interface(_attr: TokenStream, item: TokenStream) -> TokenStream {
     let input = parse_macro_input!(item as ItemTrait);
     let trait_name = &input.ident;
 
-    let method_impls: Vec<_> = input
+    let methods: Vec<_> = input
         .items
         .iter()
         .map(|item| {
             if let TraitItem::Method(method) = item {
-                let method_name = &method.sig.ident;
-                let selector_bytes = keccak256(method_name.to_string())[..4]
-                    .try_into()
-                    .unwrap_or_default();
-                let method_selector = u32::from_be_bytes(selector_bytes);
-
-                // Extract argument types and names, skipping self
-                let arg_types: Vec<_> = method
-                    .sig
-                    .inputs
-                    .iter()
-                    .skip(1)
-                    .map(|arg| {
-                        if let FnArg::Typed(pat_type) = arg {
-                            let ty = &*pat_type.ty;
-                            quote! { #ty }
-                        } else {
-                            panic!("Expected typed arguments");
-                        }
-                    })
-                    .collect();
-                let arg_names: Vec<_> = (0..method.sig.inputs.len() - 1)
-                    .map(|i| format_ident!("arg{}", i))
-                    .collect();
-
-                // Get the return type
-                let return_type = match &method.sig.output {
-                    ReturnType::Default => quote! { () },
-                    ReturnType::Type(_, ty) =>
-                        quote! { #ty },
-                };
-
-                // Generate calldata with different encoding depending on # of args
-                let args_encoding = if arg_names.is_empty() {
-                    quote! {
-                        let mut complete_calldata = Vec::with_capacity(4);
-                        complete_calldata.extend_from_slice(&[
-                            #method_selector.to_be_bytes()[0],
-                            #method_selector.to_be_bytes()[1],
-                            #method_selector.to_be_bytes()[2],
-                            #method_selector.to_be_bytes()[3],
-                        ]);
-                    }
-                } else if arg_names.len() == 1 {
-                    quote! {
-                        let mut args_calldata = #(#arg_names),*.abi_encode();
-                        let mut complete_calldata = Vec::with_capacity(4 + args_calldata.len());
-                        complete_calldata.extend_from_slice(&[
-                            #method_selector.to_be_bytes()[0],
-                            #method_selector.to_be_bytes()[1],
-                            #method_selector.to_be_bytes()[2],
-                            #method_selector.to_be_bytes()[3],
-                        ]);
-                        complete_calldata.append(&mut args_calldata);
-                    }
-                } else {
-                    quote! {
-                        let mut args_calldata = (#(#arg_names),*).abi_encode();
-                        let mut complete_calldata = Vec::with_capacity(4 + args_calldata.len());
-                        complete_calldata.extend_from_slice(&[
-                            #method_selector.to_be_bytes()[0],
-                            #method_selector.to_be_bytes()[1],
-                            #method_selector.to_be_bytes()[2],
-                            #method_selector.to_be_bytes()[3],
-                        ]);
-                        complete_calldata.append(&mut args_calldata);
-                    }
-                };
-
-                Some(quote! {
-                    pub fn #method_name(&self, #(#arg_names: #arg_types),*) -> Option<#return_type> {
-                        use alloy_sol_types::SolValue;
-                        use alloc::vec::Vec;
-
-                        #args_encoding
-
-                        // Make the call
-                        let result = eth_riscv_runtime::call_contract(
-                            self.address,
-                            0_u64,
-                            &complete_calldata,
-                            32_u64 // TODO: Figure out how to use SolType to get the return size
-
-                        )?;
-
-                        // Decode result
-                        <#return_type>::abi_decode(&result, true).ok()
-                    }
-                })
+                method
             } else {
-                panic!("Expected methods arguments");
+                panic!("Expected methods arguments")
             }
         })
         .collect();
 
-    let expanded = quote! {
-        pub struct #trait_name {
-            address: Address,
-        }
+    // Generate intreface implementation
+    let interface = helpers::generate_interface(&methods, trait_name);
 
-        impl #trait_name {
-            pub fn new(address: Address) -> Self {
-                Self { address }
-            }
-
-            #(#method_impls)*
-        }
+    let output = quote! {
+        #interface
     };
 
-    TokenStream::from(expanded)
+    TokenStream::from(output)
 }

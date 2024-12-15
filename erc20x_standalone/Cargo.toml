@@ -1,11 +1,7 @@
 [package]
-name = "erc20"
+name = "erc20x_standalone"
 version = "0.1.0"
 edition = "2021"
-
-[features]
-default = []
-interface-only = []
 
 [dependencies]
 contract-derive = { path = "../contract-derive" }

@@ -9,10 +9,13 @@ use contract_derive::{contract, interface};
 extern crate alloc;
 use alloc::{string::String, vec::Vec};
 
-use erc20::IERC20;
-
 #[derive(Default)]
 pub struct ERC20x;
+
+#[interface]
+trait IERC20 {
+    fn balance_of(&self, owner: Address) -> u64;
+}
 
 #[contract]
 impl ERC20x {
