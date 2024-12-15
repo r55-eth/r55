@@ -4,7 +4,7 @@ use proc_macro::TokenStream;
 use quote::{format_ident, quote};
 use syn::{FnArg, Ident, ImplItemMethod, ReturnType, TraitItemMethod};
 
-// Method info that we need from `ImplItemMethod` and `TraitItemMethod`
+// Unified method info from `ImplItemMethod` and `TraitItemMethod`
 pub struct MethodInfo<'a> {
     name: &'a Ident,
     args: Vec<syn::FnArg>,

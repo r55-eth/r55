@@ -232,7 +232,8 @@ pub fn contract(_attr: TokenStream, item: TokenStream) -> TokenStream {
             #interface
         }
 
-        // Generate the call method implementation privately + only when necessarys
+        // Generate the call method implementation privately
+        // only when not in `interface-only` mode
         #[cfg(not(feature = "interface-only"))]
         mod implementation {
             use super::*;
@@ -277,7 +278,6 @@ pub fn contract(_attr: TokenStream, item: TokenStream) -> TokenStream {
         pub use implementation::*;
     };
 
-    // Convert the output to TokenStream
     TokenStream::from(output)
 }
 
