@@ -16,7 +16,6 @@ pub fn initialize_logger() {
                 log_level
             )))
             .with_target(false)
-            // .without_time()
             .finish();
         tracing::subscriber::set_global_default(tracing_sub)
             .expect("Setting tracing subscriber failed");
