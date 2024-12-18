@@ -13,7 +13,6 @@ use tracing::{debug, error, info};
 
 const ERC20_PATH: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/../erc20");
 const ERC20X_PATH: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/../erc20x");
-const ERC20X_ALONE_PATH: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/../erc20x_standalone");
 
 #[test]
 fn erc20() {

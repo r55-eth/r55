@@ -97,6 +97,7 @@ Nothing has to be changed in how transactions are handled or created.
 ## macOS
 
 ```shell
+brew tap riscv-software-src/riscv
 brew install riscv-gnu-toolchain gettext
 ```
 
