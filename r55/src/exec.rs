@@ -13,11 +13,13 @@ use revm::{
 };
 use rvemu::{emulator::Emulator, exception::Exception};
 use std::{collections::BTreeMap, rc::Rc, sync::Arc};
-use tracing::{debug, warn};
+use tracing::{debug, trace, warn};
 
 use super::error::{Error, Result, TxResult};
 use super::gas;
 use super::syscall_gas;
+
+const R5_REST_OF_RAM_INIT: u64 = 0x80300000; // Defined at `r5-rust-rt.x`
 
 pub fn deploy_contract(db: &mut InMemoryDB, bytecode: Bytes) -> Result<Address> {
     let mut evm = Evm::builder()
@@ -203,7 +205,7 @@ fn execute_riscv(
 ) -> Result<InterpreterAction> {
     debug!(
         "{} RISC-V execution:  PC: {:#x}  Return data dst: {:#?}",
-        if rvemu.emu.cpu.pc == 0x80300000 {
+        if rvemu.emu.cpu.pc == R5_REST_OF_RAM_INIT {
             "Starting"
         } else {
             "Resuming"
@@ -547,7 +549,7 @@ fn execute_riscv(
                 }
             }
             Ok(_) => {
-                debug!("Successful instruction at PC: {:#x}", emu.cpu.pc);
+                trace!("Successful instruction at PC: {:#x}", emu.cpu.pc);
                 continue;
             }
             Err(e) => {

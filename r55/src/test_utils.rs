@@ -11,12 +11,8 @@ pub fn initialize_logger() {
         let log_level = std::env::var("RUST_LOG").unwrap_or("INFO".to_owned());
         let tracing_sub = tracing_subscriber::fmt()
             .with_max_level(tracing::Level::DEBUG)
-            .with_env_filter(tracing_subscriber::EnvFilter::new(&format!(
-                "{}",
-                log_level
-            )))
+            .with_env_filter(tracing_subscriber::EnvFilter::new(log_level))
             .with_target(false)
-            // .without_time()
             .finish();
         tracing::subscriber::set_global_default(tracing_sub)
             .expect("Setting tracing subscriber failed");
