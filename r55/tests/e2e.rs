@@ -53,7 +53,7 @@ fn erc20() {
         Bytes::from(complete_calldata_mint.clone())
     );
     match run_tx(&mut db, &addr1, complete_calldata_mint.clone()) {
-        Ok(res) => info!("Success! {}", res),
+        Ok(res) => info!("{}", res),
         Err(e) => {
             error!("Error when executing tx! {:#?}", e);
             panic!()
@@ -68,7 +68,7 @@ fn erc20() {
         Bytes::from(complete_calldata_balance.clone())
     );
     match run_tx(&mut db, &addr1, complete_calldata_balance.clone()) {
-        Ok(res) => info!("Success! {}", res),
+        Ok(res) => info!("{}", res),
         Err(e) => {
             error!("Error when executing tx! {:#?}", e);
             panic!()
@@ -83,7 +83,7 @@ fn erc20() {
         Bytes::from(complete_calldata_x_balance.clone())
     );
     match run_tx(&mut db, &addr2, complete_calldata_x_balance.clone()) {
-        Ok(res) => info!("Success! {}", res),
+        Ok(res) => info!("{}", res),
         Err(e) => {
             error!("Error when executing tx! {:#?}", e);
             panic!();
