@@ -224,11 +224,11 @@ pub fn contract(_attr: TokenStream, item: TokenStream) -> TokenStream {
 
         #emit_helper
         impl Contract for #struct_name {
-            fn call(&self) {
+            fn call(&mut self) {
                 self.call_with_data(&msg_data());
             }
 
-            fn call_with_data(&self, calldata: &[u8]) {
+            fn call_with_data(&mut self, calldata: &[u8]) {
                 let selector = u32::from_be_bytes([calldata[0], calldata[1], calldata[2], calldata[3]]);
                 let calldata = &calldata[4..];
 
@@ -244,7 +244,7 @@ pub fn contract(_attr: TokenStream, item: TokenStream) -> TokenStream {
         #[eth_riscv_runtime::entry]
         fn main() -> !
         {
-            let contract = #struct_name::default();
+            let mut contract = #struct_name::default();
             contract.call();
             eth_riscv_runtime::return_riscv(0, 0)
         }

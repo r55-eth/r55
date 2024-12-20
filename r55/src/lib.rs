@@ -131,6 +131,7 @@ mod tests {
         let bytecode = compile_with_prefix(compile_runtime, ERC20_PATH).unwrap();
         add_contract_to_db(&mut db, CONTRACT_ADDR, bytecode);
 
+        let selector_total_supply = get_selector_from_sig("total_supply");
         let selector_balance = get_selector_from_sig("balance_of");
         let selector_mint = get_selector_from_sig("mint");
         let selector_transfer = get_selector_from_sig("transfer");
@@ -178,6 +179,14 @@ mod tests {
             alice_balance.output,
             Uint::from(42).abi_encode(),
             "Incorrect balance"
+        );
+
+        // Check total supply
+        let total_supply = run_tx(&mut db, &CONTRACT_ADDR, selector_total_supply.to_vec()).unwrap();
+        assert_eq!(
+            total_supply.output,
+            Uint::from(42).abi_encode(),
+            "Incorrect total supply"
         );
 
         // Transfer 21 tokens from Alice to Bob
