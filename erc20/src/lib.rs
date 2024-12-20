@@ -4,7 +4,7 @@
 use core::default::Default;
 
 use contract_derive::{contract, payable, Event};
-use eth_riscv_runtime::types::Mapping;
+use eth_riscv_runtime::types::{Mapping, Word};
 
 use alloy_core::primitives::{address, Address, U256};
 
@@ -15,7 +15,7 @@ use alloc::string::String;
 pub struct ERC20 {
     balances: Mapping<Address, u64>,
     allowances: Mapping<Address, Mapping<Address, u64>>,
-    total_supply: U256,
+    total_supply: Word<U256>,
     name: String,
     symbol: String,
     decimals: u8,
@@ -45,7 +45,7 @@ impl ERC20 {
         self.balances.read(owner)
     }
 
-    pub fn transfer(&self, to: Address, value: u64) -> bool {
+    pub fn transfer(&mut self, to: Address, value: u64) -> bool {
         let from = msg_sender();
         let from_balance = self.balances.read(from);
         let to_balance = self.balances.read(to);
@@ -61,13 +61,13 @@ impl ERC20 {
         true
     }
 
-    pub fn approve(&self, spender: Address, value: u64) -> bool {
-        let spender_allowances = self.allowances.read(msg_sender());
+    pub fn approve(&mut self, spender: Address, value: u64) -> bool {
+        let mut spender_allowances = self.allowances.read(msg_sender());
         spender_allowances.write(spender, value);
         true
     }
 
-    pub fn transfer_from(&self, sender: Address, recipient: Address, amount: u64) -> bool {
+    pub fn transfer_from(&mut self, sender: Address, recipient: Address, amount: u64) -> bool {
         let allowance = self.allowances.read(sender).read(msg_sender());
         let sender_balance = self.balances.read(sender);
         let recipient_balance = self.balances.read(recipient);
@@ -82,7 +82,7 @@ impl ERC20 {
     }
 
     pub fn total_supply(&self) -> U256 {
-        self.total_supply
+        self.total_supply.read()
     }
 
     pub fn allowance(&self, owner: Address, spender: Address) -> u64 {
@@ -90,11 +90,15 @@ impl ERC20 {
     }
 
     #[payable]
-    pub fn mint(&self, to: Address, value: u64) -> bool {
+    pub fn mint(&mut self, to: Address, value: u64) -> bool {
         let owner = msg_sender();
 
         let to_balance = self.balances.read(to);
         self.balances.write(to, to_balance + value);
+
+        let prev_supply = self.total_supply.read();
+        self.total_supply.write(prev_supply + U256::from(value));
+
         log::emit(Transfer::new(
             address!("0000000000000000000000000000000000000000"),
             to,

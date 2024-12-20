@@ -28,6 +28,7 @@ fn erc20() {
     let selector_balance = get_selector_from_sig("balance_of");
     let selector_x_balance = get_selector_from_sig("x_balance_of");
     let selector_mint = get_selector_from_sig("mint");
+    let total_supply = get_selector_from_sig("total_supply");
     let alice: Address = address!("000000000000000000000000000000000000000A");
     let value_mint: u64 = 42;
     let mut calldata_balance = alice.abi_encode();
@@ -53,6 +54,18 @@ fn erc20() {
         Bytes::from(complete_calldata_mint.clone())
     );
     match run_tx(&mut db, &addr1, complete_calldata_mint.clone()) {
+        Ok(res) => info!("Success! {}", res),
+        Err(e) => {
+            error!("Error when executing tx! {:#?}", e);
+            panic!()
+        }
+    };
+
+    info!("----------------------------------------------------------");
+    info!("-- TOTAL SUPPLY -------------------------------------------");
+    info!("----------------------------------------------------------");
+    debug!("Tx Calldata:\n> {:#?}", Bytes::from(total_supply.to_vec()));
+    match run_tx(&mut db, &addr1, total_supply.to_vec()) {
         Ok(res) => info!("Success! {}", res),
         Err(e) => {
             error!("Error when executing tx! {:#?}", e);
