@@ -69,6 +69,8 @@ pub fn compile_deploy(path: &str) -> eyre::Result<Vec<u8>> {
         .arg("riscv64imac-unknown-none-elf")
         .arg("--bin")
         .arg("deploy")
+        .arg("--features")
+        .arg("deploy")
         .current_dir(path)
         .status()
         .expect("Failed to execute cargo command");
