@@ -5,6 +5,7 @@ edition = "2021"
 
 [features]
 default = []
+deploy = []
 interface-only = []
 
 [dependencies]
@@ -20,7 +21,8 @@ path = "src/lib.rs"
 
 [[bin]]
 name = "deploy"
-path = "src/deploy.rs"
+path = "src/lib.rs"
+required-features = ["deploy"]
 
 [profile.release]
 lto = true
