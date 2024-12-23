@@ -13,7 +13,7 @@ use revm::{
 };
 use rvemu::{emulator::Emulator, exception::Exception};
 use std::{collections::BTreeMap, rc::Rc, sync::Arc};
-use tracing::{debug, trace, warn};
+use tracing::{debug, info, trace, warn};
 
 use super::error::{Error, Result, TxResult};
 use super::gas;
@@ -21,13 +21,32 @@ use super::syscall_gas;
 
 const R5_REST_OF_RAM_INIT: u64 = 0x80300000; // Defined at `r5-rust-rt.x`
 
-pub fn deploy_contract(db: &mut InMemoryDB, bytecode: Bytes) -> Result<Address> {
+pub fn deploy_contract(
+    db: &mut InMemoryDB,
+    bytecode: Bytes,
+    encoded_args: Option<Vec<u8>>,
+) -> Result<Address> {
+    // Craft initcode: [codesize][bytecode][constructor_args]
+    let codesize = U256::from(bytecode.len());
+    info!("CODESIZE: {}", codesize);
+
+    let mut init_code = Vec::new();
+    init_code.extend_from_slice(&Bytes::from(codesize.to_be_bytes_vec()));
+    init_code.extend_from_slice(&bytecode);
+    if let Some(args) = encoded_args {
+        init_code.extend_from_slice(&args);
+    }
+    info!("INITCODE SIZE: {}", init_code.len());
+
+    // Run CREATE tx
     let mut evm = Evm::builder()
         .with_db(db)
         .modify_tx_env(|tx| {
             tx.caller = address!("000000000000000000000000000000000000000A");
             tx.transact_to = TransactTo::Create;
             tx.data = bytecode;
+            // tx.data = Bytes::from(init_code);
+            // tx.data = Bytes::default();
             tx.value = U256::from(0);
         })
         .append_handler_register(handle_register)

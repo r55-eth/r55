@@ -24,7 +24,7 @@ fn deploy_erc20x_without_contract_dependencies() {
         }
     };
 
-    match deploy_contract(&mut db, bytecode) {
+    match deploy_contract(&mut db, bytecode, None) {
         Ok(addr) => info!("Contract deployed at {}", addr),
         Err(e) => {
             error!("Failed to deploy ERC20X: {:?}", e);

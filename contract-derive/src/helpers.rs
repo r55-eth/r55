@@ -136,16 +136,49 @@ where
 
 // Helper function to generate the deployment code
 pub fn generate_initcode(
-    _struct_name: &Ident,
+    struct_name: &Ident,
     constructor: Option<&ImplItemMethod>,
 ) -> quote::__private::TokenStream {
+    // Decode constructor args + trigger constructor logic
+    let constructor_code = match constructor {
+        Some(method) => {
+            let method_info = MethodInfo::from(method);
+            let (arg_names, arg_types) = get_arg_props(false, &method_info);
+            quote! {
+                let (#(#arg_names),*) = <(#(#arg_types),*)>::abi_decode(&calldata, true)
+                    .expect("Failed to decode constructor args");
+                #struct_name::new(#(#arg_names),*)
+            }
+        }
+        None => quote! {
+            #struct_name::default()
+        },
+    };
+
     quote! {
         use alloc::vec::Vec;
 
         #[no_mangle]
         pub extern "C" fn main() -> ! {
-            // TODO: figure out constructor
+            // // Get initcode + check valid size
+            // let init_code = eth_riscv_runtime::msg_data();
 
+            // // Extract code size + constructor args
+            // let code_size = U256::from_be_slice(init_code.first_chunk::<32>().unwrap());
+            // let calldata = if init_code.len() > (32 + code_size.to::<usize>()) {
+            //     &init_code[32 + code_size.to::<usize>()..]
+            // } else {
+            //     &[]
+            // };
+
+            // // Initialize contract
+            // let contract = if !calldata.is_empty() {
+            //     #constructor_code
+            // } else {
+            //     #struct_name::default()
+            // };
+
+            // Return runtime code
             let runtime: &[u8] = include_bytes!("../target/riscv64imac-unknown-none-elf/release/runtime");
             let mut prepended_runtime = Vec::with_capacity(1 + runtime.len());
             prepended_runtime.push(0xff);

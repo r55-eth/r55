@@ -22,8 +22,8 @@ fn erc20() {
 
     let bytecode = compile_with_prefix(compile_deploy, ERC20_PATH).unwrap();
     let bytecode_x = compile_with_prefix(compile_deploy, ERC20X_PATH).unwrap();
-    let addr1 = deploy_contract(&mut db, bytecode).unwrap();
-    let addr2 = deploy_contract(&mut db, bytecode_x).unwrap();
+    let addr1 = deploy_contract(&mut db, bytecode, None).unwrap();
+    let addr2 = deploy_contract(&mut db, bytecode_x, None).unwrap();
 
     let selector_balance = get_selector_from_sig("balance_of");
     let selector_x_balance = get_selector_from_sig("x_balance_of");

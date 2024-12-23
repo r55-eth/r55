@@ -41,16 +41,16 @@ pub struct Mint {
 
 #[contract]
 impl ERC20 {
-    // pub fn new(&self) -> Self {
-    //     // init the contract
-    //     let erc20 = ERC20::default();
+    pub fn new() -> Self {
+        // init the contract
+        let erc20 = ERC20::default();
 
-    //     // pre-mint some tokens
-    //     erc20.balances.write(msg_sender(), 100);
+        // pre-mint some tokens for `msg_sender()`
+        erc20.balances.write(msg_sender(), 1_000_000);
 
-    //     // return the initialized contract
-    //     erc20
-    // }
+        // return the initialized contract
+        erc20
+    }
 
     pub fn balance_of(&self, owner: Address) -> u64 {
         self.balances.read(owner)

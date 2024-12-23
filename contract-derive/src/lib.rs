@@ -224,7 +224,7 @@ pub fn contract(_attr: TokenStream, item: TokenStream) -> TokenStream {
     let interface = helpers::generate_interface(&public_methods, &interface_name);
 
     // Generate initcode for deployments
-    let init_code = helpers::generate_initcode(struct_name, constructor);
+    let deployment_code = helpers::generate_initcode(struct_name, constructor);
 
     // Generate the complete output with module structure
     let output = quote! {
@@ -235,7 +235,10 @@ pub fn contract(_attr: TokenStream, item: TokenStream) -> TokenStream {
         #[cfg(feature = "deploy")]
             pub mod deploy {
             use super::*;
-            #init_code
+            use alloy_sol_types::SolValue;
+            use eth_riscv_runtime::*;
+
+            #deployment_code
         }
 
         // Public interface module
