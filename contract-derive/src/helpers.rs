@@ -135,7 +135,7 @@ where
 }
 
 // Helper function to generate the deployment code
-pub fn generate_initcode(
+pub fn generate_deployment_code(
     _struct_name: &Ident,
     constructor: Option<&ImplItemMethod>,
 ) -> quote::__private::TokenStream {
