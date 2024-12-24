@@ -1,40 +1,18 @@
-use core::default::Default;
-use core::marker::PhantomData;
-
-use crate::*;
-
-use alloy_sol_types::{SolType, SolValue};
-
-extern crate alloc;
-use alloc::vec::Vec;
+use super::*;
 
 /// Implements a Solidity-like Mapping type.
 #[derive(Default)]
 pub struct Mapping<K, V> {
     id: u64,
-    pd: PhantomData<(K, V)>,
+    _pd: PhantomData<(K, V)>,
 }
 
-/// A trait for types that can be read from and written to storage slots
-pub trait StorageStorable {
-    fn read(key: u64) -> Self;
-    fn write(&self, key: u64);
-}
-
-impl<V> StorageStorable for V
-where
-    V: SolValue + core::convert::From<<<V as SolValue>::SolType as SolType>::RustType>,
-{
-    fn read(encoded_key: u64) -> Self {
-        let bytes: [u8; 32] = sload(encoded_key).to_be_bytes();
-        Self::abi_decode(&bytes, false).unwrap_or_else(|_| revert())
-    }
-
-    fn write(&self, key: u64) {
-        let bytes = self.abi_encode();
-        let mut padded = [0u8; 32];
-        padded[..bytes.len()].copy_from_slice(&bytes);
-        sstore(key, U256::from_be_bytes(padded));
+impl<K, V> StorageLayout for Mapping<K, V> {
+    fn allocate(slot: u64) -> Self {
+        Self {
+            id: slot,
+            _pd: PhantomData::default(),
+        }
     }
 }
 
@@ -42,11 +20,11 @@ impl<K: SolValue, V: StorageStorable> StorageStorable for Mapping<K, V> {
     fn read(encoded_key: u64) -> Self {
         Self {
             id: encoded_key,
-            pd: PhantomData,
+            _pd: PhantomData,
         }
     }
 
-    fn write(&self, _key: u64) {
+    fn write(&mut self, _key: u64) {
         // Mapping types can not directly be written to a storage slot
         // Instead the elements they contain need to be individually written to their own slots
         revert();
@@ -54,6 +32,13 @@ impl<K: SolValue, V: StorageStorable> StorageStorable for Mapping<K, V> {
 }
 
 impl<K: SolValue, V: StorageStorable> Mapping<K, V> {
+    pub fn new(id: u64) -> Self {
+        Self {
+            id,
+            _pd: PhantomData::default(),
+        }
+    }
+
     pub fn encode_key(&self, key: K) -> u64 {
         let key_bytes = key.abi_encode();
         let id_bytes = self.id.to_le_bytes();
@@ -77,7 +62,7 @@ impl<K: SolValue, V: StorageStorable> Mapping<K, V> {
         V::read(self.encode_key(key))
     }
 
-    pub fn write(&self, key: K, value: V) {
+    pub fn write(&mut self, key: K, mut value: V) {
         value.write(self.encode_key(key));
     }
 }
