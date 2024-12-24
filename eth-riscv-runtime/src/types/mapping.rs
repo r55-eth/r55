@@ -32,13 +32,6 @@ impl<K: SolValue, V: StorageStorable> StorageStorable for Mapping<K, V> {
 }
 
 impl<K: SolValue, V: StorageStorable> Mapping<K, V> {
-    pub fn new(id: u64) -> Self {
-        Self {
-            id,
-            _pd: PhantomData::default(),
-        }
-    }
-
     pub fn encode_key(&self, key: K) -> u64 {
         let key_bytes = key.abi_encode();
         let id_bytes = self.id.to_le_bytes();
