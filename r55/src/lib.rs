@@ -131,6 +131,7 @@ mod tests {
         let bytecode = compile_with_prefix(compile_runtime, ERC20_PATH).unwrap();
         add_contract_to_db(&mut db, CONTRACT_ADDR, bytecode);
 
+        let selector_total_supply = get_selector_from_sig("total_supply");
         let selector_balance = get_selector_from_sig("balance_of");
         let selector_mint = get_selector_from_sig("mint");
         let selector_transfer = get_selector_from_sig("transfer");
@@ -166,6 +167,14 @@ mod tests {
         // Mint 42 tokens to Alice
         let mint_result = run_tx(&mut db, &CONTRACT_ADDR, complete_calldata_mint.clone()).unwrap();
         assert!(mint_result.status, "Mint transaction failed");
+
+        // Check total supply
+        let total_supply = run_tx(&mut db, &CONTRACT_ADDR, selector_total_supply.to_vec()).unwrap();
+        assert_eq!(
+            total_supply.output,
+            Uint::from(42).abi_encode(),
+            "Incorrect total supply"
+        );
 
         // Check Alice's balance
         let alice_balance = run_tx(
@@ -252,7 +261,7 @@ mod tests {
         let topics = log.data.topics();
 
         // Expected event hash for Transfer event
-        let expected_event_hash = keccak256("Transfer(address,address,uint64)");
+        let expected_event_hash = keccak256("Transfer(address,address,uint256)");
         assert_eq!(
             hex::encode(topics[0]),
             hex::encode(expected_event_hash),
@@ -274,7 +283,11 @@ mod tests {
         );
 
         // Assert transfer amount
-        let amount = u64::from_be_bytes(log.data.data[24..32].try_into().unwrap());
-        assert_eq!(amount, 50, "Incorrect transfer amount in transfer log");
+        let amount = U256::from_be_slice(log.data.data[..32].try_into().unwrap());
+        assert_eq!(
+            amount,
+            U256::from(50),
+            "Incorrect transfer amount in transfer log"
+        );
     }
 }

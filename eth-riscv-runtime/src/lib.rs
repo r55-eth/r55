@@ -22,8 +22,8 @@ pub use call::call_contract;
 const CALLDATA_ADDRESS: usize = 0x8000_0000;
 
 pub trait Contract {
-    fn call(&self);
-    fn call_with_data(&self, calldata: &[u8]);
+    fn call(&mut self);
+    fn call_with_data(&mut self, calldata: &[u8]);
 }
 
 pub unsafe fn slice_from_raw_parts(address: usize, length: usize) -> &'static [u8] {

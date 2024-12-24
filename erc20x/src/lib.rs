@@ -3,7 +3,7 @@
 
 use core::default::Default;
 
-use alloy_core::primitives::{address, Address, U256};
+use alloy_core::primitives::{Address, U256};
 use contract_derive::{contract, interface};
 
 extern crate alloc;
@@ -16,7 +16,7 @@ pub struct ERC20x;
 
 #[contract]
 impl ERC20x {
-    pub fn x_balance_of(&self, owner: Address, target: Address) -> u64 {
+    pub fn x_balance_of(&self, owner: Address, target: Address) -> U256 {
         let token = IERC20::new(target);
         match token.balance_of(owner) {
             Some(balance) => balance,

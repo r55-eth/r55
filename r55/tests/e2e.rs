@@ -25,6 +25,7 @@ fn erc20() {
     let addr1 = deploy_contract(&mut db, bytecode).unwrap();
     let addr2 = deploy_contract(&mut db, bytecode_x).unwrap();
 
+    let total_supply = get_selector_from_sig("total_supply");
     let selector_balance = get_selector_from_sig("balance_of");
     let selector_x_balance = get_selector_from_sig("x_balance_of");
     let selector_mint = get_selector_from_sig("mint");
@@ -54,6 +55,18 @@ fn erc20() {
     );
     match run_tx(&mut db, &addr1, complete_calldata_mint.clone()) {
         Ok(res) => info!("{}", res),
+        Err(e) => {
+            error!("Error when executing tx! {:#?}", e);
+            panic!()
+        }
+    };
+
+    info!("----------------------------------------------------------");
+    info!("-- TOTAL SUPPLY ------------------------------------------");
+    info!("----------------------------------------------------------");
+    debug!("Tx Calldata:\n> {:#?}", Bytes::from(total_supply.to_vec()));
+    match run_tx(&mut db, &addr1, total_supply.to_vec()) {
+        Ok(res) => info!("Success! {}", res),
         Err(e) => {
             error!("Error when executing tx! {:#?}", e);
             panic!()
