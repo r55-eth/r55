@@ -224,7 +224,7 @@ pub fn contract(_attr: TokenStream, item: TokenStream) -> TokenStream {
     let interface = helpers::generate_interface(&public_methods, &interface_name);
 
     // Generate initcode for deployments
-    let deployment_code = helpers::generate_initcode(struct_name, constructor);
+    let deployment_code = helpers::generate_deployment_code(struct_name, constructor);
 
     // Generate the complete output with module structure
     let output = quote! {
