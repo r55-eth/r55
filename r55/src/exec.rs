@@ -44,9 +44,8 @@ pub fn deploy_contract(
         .modify_tx_env(|tx| {
             tx.caller = address!("000000000000000000000000000000000000000A");
             tx.transact_to = TransactTo::Create;
-            tx.data = bytecode;
-            // tx.data = Bytes::from(init_code);
-            // tx.data = Bytes::default();
+            // tx.data = bytecode;
+            tx.data = Bytes::from(init_code);
             tx.value = U256::from(0);
         })
         .append_handler_register(handle_register)
