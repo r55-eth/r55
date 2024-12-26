@@ -139,21 +139,21 @@ pub fn generate_deployment_code(
     struct_name: &Ident,
     constructor: Option<&ImplItemMethod>,
 ) -> quote::__private::TokenStream {
-    // Decode constructor args + trigger constructor logic
-    let constructor_code = match constructor {
-        Some(method) => {
-            let method_info = MethodInfo::from(method);
-            let (arg_names, arg_types) = get_arg_props(false, &method_info);
-            quote! {
-                let (#(#arg_names),*) = <(#(#arg_types),*)>::abi_decode(&calldata, true)
-                    .expect("Failed to decode constructor args");
-                #struct_name::new(#(#arg_names),*)
-            }
-        }
-        None => quote! {
-            #struct_name::default()
-        },
-    };
+    // // Decode constructor args + trigger constructor logic
+    // let constructor_code = match constructor {
+    //     Some(method) => {
+    //         let method_info = MethodInfo::from(method);
+    //         let (arg_names, arg_types) = get_arg_props(false, &method_info);
+    //             quote! {
+    //                 let (#(#arg_names),*) = <(#(#arg_types),*)>::abi_decode(&calldata, true)
+    //                     .expect("Failed to decode constructor args");
+    //                 #struct_name::new(#(#arg_names),*)
+    //             }
+    //     }
+    //     None => quote! {
+    //         #struct_name::default()
+    //     },
+    // };
 
     quote! {
         use alloc::vec::Vec;
@@ -171,12 +171,12 @@ pub fn generate_deployment_code(
                  &[]
             };
 
-            // Initialize contract
-            let contract = if !calldata.is_empty() {
-                 #constructor_code
-            } else {
-                 #struct_name::default()
-            };
+            // // Initialize contract
+            // let contract = if !calldata.is_empty() {
+            //      #constructor_code
+            // } else {
+            //      #struct_name::default()
+            // };
 
             // Return runtime code
             let runtime: &[u8] = include_bytes!("../target/riscv64imac-unknown-none-elf/release/runtime");
