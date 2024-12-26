@@ -160,23 +160,23 @@ pub fn generate_initcode(
 
         #[no_mangle]
         pub extern "C" fn main() -> ! {
-            // // Get initcode + check valid size
-            // let init_code = eth_riscv_runtime::msg_data();
+            // Get initcode + check valid size
+            let init_code = eth_riscv_runtime::msg_data();
 
-            // // Extract code size + constructor args
-            // let code_size = U256::from_be_slice(init_code.first_chunk::<32>().unwrap());
-            // let calldata = if init_code.len() > (32 + code_size.to::<usize>()) {
-            //     &init_code[32 + code_size.to::<usize>()..]
-            // } else {
-            //     &[]
-            // };
+            // Extract code size + constructor args
+            let code_size = U256::from_be_slice(init_code.first_chunk::<32>().unwrap());
+            let calldata = if init_code.len() > (32 + code_size.to::<usize>()) {
+                 &init_code[32 + code_size.to::<usize>()..]
+            } else {
+                 &[]
+            };
 
-            // // Initialize contract
-            // let contract = if !calldata.is_empty() {
-            //     #constructor_code
-            // } else {
-            //     #struct_name::default()
-            // };
+            // Initialize contract
+            let contract = if !calldata.is_empty() {
+                 #constructor_code
+            } else {
+                 #struct_name::default()
+            };
 
             // Return runtime code
             let runtime: &[u8] = include_bytes!("../target/riscv64imac-unknown-none-elf/release/runtime");
