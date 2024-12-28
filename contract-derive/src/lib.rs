@@ -126,7 +126,7 @@ pub fn contract(_attr: TokenStream, item: TokenStream) -> TokenStream {
             )[..4].try_into().unwrap_or_default()
         );
         let method_info = MethodInfo::from(*method);
-        let (arg_names, arg_types) = helpers::get_arg_props(true, &method_info);
+        let (arg_names, arg_types) = helpers::get_arg_props_skip_first(&method_info);
 
         // Check if there are payable methods
         let checks = if !is_payable(&method) {
