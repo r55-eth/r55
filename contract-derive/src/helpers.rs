@@ -30,7 +30,7 @@ impl<'a> From<&'a TraitItemMethod> for MethodInfo<'a> {
 }
 
 // Helper function to get the parameter names + types of a method
-pub fn get_arg_props<'a>(
+fn get_arg_props<'a>(
     skip_first_arg: bool,
     method: &'a MethodInfo<'a>,
 ) -> (Vec<Ident>, Vec<&syn::Type>) {
@@ -47,6 +47,14 @@ pub fn get_arg_props<'a>(
             }
         })
         .unzip()
+}
+
+pub fn get_arg_props_skip_first<'a>(method: &'a MethodInfo<'a>) -> (Vec<Ident>, Vec<&syn::Type>) {
+    get_arg_props(true, method)
+}
+
+pub fn get_arg_props_all<'a>(method: &'a MethodInfo<'a>) -> (Vec<Ident>, Vec<&syn::Type>) {
+    get_arg_props(false, method)
 }
 
 // Helper function to generate interface impl from user-defined methods
@@ -69,7 +77,7 @@ where
                 .unwrap_or_default(),
         );
 
-        let (arg_names, arg_types) = get_arg_props(true, method);
+        let (arg_names, arg_types) = get_arg_props_skip_first(method);
 
         let calldata = if arg_names.is_empty() {
             quote! {
