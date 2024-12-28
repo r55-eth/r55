@@ -1,4 +1,4 @@
-use alloy_core::primitives::Keccak256;
+use alloy_core::primitives::{Keccak256, U32};
 use core::{cell::RefCell, ops::Range};
 use eth_riscv_interpreter::setup_from_elf;
 use eth_riscv_syscalls::Syscall;
@@ -26,17 +26,19 @@ pub fn deploy_contract(
     bytecode: Bytes,
     encoded_args: Option<Vec<u8>>,
 ) -> Result<Address> {
-    // Craft initcode: [codesize][bytecode][constructor_args]
-    let codesize = U256::from(bytecode.len());
+    // Craft initcode: [0xFF][codesize][bytecode][constructor_args]
+    let codesize = U32::from(bytecode.len());
     info!("CODESIZE: {}", codesize);
 
     let mut init_code = Vec::new();
+    init_code.push(0xff);
     init_code.extend_from_slice(&Bytes::from(codesize.to_be_bytes_vec()));
     init_code.extend_from_slice(&bytecode);
+    info!("INITCODE SIZE: {}", init_code.len());
     if let Some(args) = encoded_args {
         init_code.extend_from_slice(&args);
     }
-    info!("INITCODE SIZE: {}", init_code.len());
+    info!("INITCODE WITH ARGS SIZE: {}", init_code.len());
 
     // Run CREATE tx
     let mut evm = Evm::builder()
@@ -57,9 +59,11 @@ pub fn deploy_contract(
     match result {
         ExecutionResult::Success {
             output: Output::Create(_value, Some(addr)),
+            logs,
             ..
         } => {
             debug!("Deployed at addr: {:?}", addr);
+            debug!("Deployment logs: {:?}", logs);
             Ok(addr)
         }
         result => Err(Error::UnexpectedExecResult(result)),
@@ -113,10 +117,32 @@ fn riscv_context(frame: &Frame) -> Option<RVEmu> {
     let interpreter = frame.interpreter();
 
     let Some((0xFF, bytecode)) = interpreter.bytecode.split_first() else {
+        warn!("NOT RISCV CONTRACT!");
         return None;
     };
 
-    match setup_from_elf(bytecode, &interpreter.contract.input) {
+    let (code, calldata) = if frame.is_create() {
+        let (code_size, init_code) = bytecode.split_at(4);
+        let code_size = U32::from_be_slice(code_size);
+        let Some((0xFF, bytecode)) = init_code.split_first() else {
+            warn!("NOT RISCV CONTRACT!");
+            return None;
+        };
+        debug!(
+            "CREATE CALLDATA: {:#?}",
+            &bytecode[code_size.to::<usize>()..init_code.len() - 33]
+        );
+        (
+            &bytecode[..code_size.to::<usize>()],
+            &bytecode[code_size.to::<usize>()..init_code.len() - 33],
+        )
+    } else if frame.is_call() {
+        (bytecode, interpreter.contract.input.as_ref())
+    } else {
+        todo!("Support EOF")
+    };
+
+    match setup_from_elf(code, calldata) {
         Ok(emu) => Some(RVEmu {
             emu,
             returned_data_destiny: None,
@@ -137,6 +163,7 @@ pub fn handle_register<EXT, DB: Database>(handler: &mut EvmHandler<'_, EXT, DB>)
     handler.execution.call = Arc::new(move |ctx, inputs| {
         let result = old_handle(ctx, inputs);
         if let Ok(FrameOrResult::Frame(frame)) = &result {
+            debug!("Creating new CALL frame");
             call_stack_inner.borrow_mut().push(riscv_context(frame));
         }
         result
@@ -148,6 +175,8 @@ pub fn handle_register<EXT, DB: Database>(handler: &mut EvmHandler<'_, EXT, DB>)
     handler.execution.create = Arc::new(move |ctx, inputs| {
         let result = old_handle(ctx, inputs);
         if let Ok(FrameOrResult::Frame(frame)) = &result {
+            debug!("Creating new CREATE frame");
+            // debug!("CREATE BYTECODE: {}", frame.interpreter().bytecode);
             call_stack_inner.borrow_mut().push(riscv_context(frame));
         }
         result
@@ -324,6 +353,12 @@ fn execute_riscv(
                         let second: u64 = emu.cpu.xregs.read(12);
                         let third: u64 = emu.cpu.xregs.read(13);
                         let fourth: u64 = emu.cpu.xregs.read(14);
+                        debug!(
+                            "> SSTORE ({}) - Key: {}, Value: {}",
+                            interpreter.contract.target_address,
+                            key,
+                            U256::from_limbs([first, second, third, fourth])
+                        );
                         let result = host.sstore(
                             interpreter.contract.target_address,
                             U256::from(key),

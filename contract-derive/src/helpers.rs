@@ -139,44 +139,37 @@ pub fn generate_deployment_code(
     struct_name: &Ident,
     constructor: Option<&ImplItemMethod>,
 ) -> quote::__private::TokenStream {
-    // // Decode constructor args + trigger constructor logic
-    // let constructor_code = match constructor {
-    //     Some(method) => {
-    //         let method_info = MethodInfo::from(method);
-    //         let (arg_names, arg_types) = get_arg_props(false, &method_info);
-    //             quote! {
-    //                 let (#(#arg_names),*) = <(#(#arg_types),*)>::abi_decode(&calldata, true)
-    //                     .expect("Failed to decode constructor args");
-    //                 #struct_name::new(#(#arg_names),*)
-    //             }
-    //     }
-    //     None => quote! {
-    //         #struct_name::default()
-    //     },
-    // };
+    // Decode constructor args + trigger constructor logic
+    let constructor_code = match constructor {
+        Some(method) => {
+            let method_info = MethodInfo::from(method);
+            let (arg_names, arg_types) = get_arg_props(false, &method_info);
+            quote! {
+                impl #struct_name {
+                    #method
+                }
+
+                let (#(#arg_names),*) = <(#(#arg_types),*)>::abi_decode(&calldata, true)
+                    .expect("Failed to decode constructor args");
+                #struct_name::new(#(#arg_names),*);
+            }
+        }
+        None => quote! {
+            #struct_name::default();
+        },
+    };
 
     quote! {
         use alloc::vec::Vec;
+        use alloy_core::primitives::U32;
 
         #[no_mangle]
         pub extern "C" fn main() -> ! {
             // Get initcode + check valid size
-            let init_code = eth_riscv_runtime::msg_data();
+            let calldata = eth_riscv_runtime::msg_data();
 
-            // Extract code size + constructor args
-            let code_size = U256::from_be_slice(init_code.first_chunk::<32>().unwrap());
-            let calldata = if init_code.len() > (32 + code_size.to::<usize>()) {
-                 &init_code[32 + code_size.to::<usize>()..]
-            } else {
-                 &[]
-            };
-
-            // // Initialize contract
-            // let contract = if !calldata.is_empty() {
-            //      #constructor_code
-            // } else {
-            //      #struct_name::default()
-            // };
+            // Initialize contract
+            #constructor_code
 
             // Return runtime code
             let runtime: &[u8] = include_bytes!("../target/riscv64imac-unknown-none-elf/release/runtime");

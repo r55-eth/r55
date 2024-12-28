@@ -46,7 +46,17 @@ impl ERC20 {
         let erc20 = ERC20::default();
 
         // pre-mint some tokens for `msg_sender()`
-        erc20.balances.write(msg_sender(), 1_000_000);
+        erc20.balances.write(
+            address!("000000000000000000000000000000000000000A"),
+            1_000_000_000,
+        );
+
+        // emit logs
+        log::emit(Transfer::new(
+            address!("0000000000000000000000000000000000000000"),
+            address!("000000000000000000000000000000000000000A"),
+            1_000_000_000,
+        ));
 
         // return the initialized contract
         erc20

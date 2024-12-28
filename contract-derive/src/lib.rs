@@ -238,6 +238,7 @@ pub fn contract(_attr: TokenStream, item: TokenStream) -> TokenStream {
             use alloy_sol_types::SolValue;
             use eth_riscv_runtime::*;
 
+            #emit_helper
             #deployment_code
         }
 

@@ -21,9 +21,9 @@ fn erc20() {
     let mut db = InMemoryDB::default();
 
     let bytecode = compile_with_prefix(compile_deploy, ERC20_PATH).unwrap();
-    let bytecode_x = compile_with_prefix(compile_deploy, ERC20X_PATH).unwrap();
+    // let bytecode_x = compile_with_prefix(compile_deploy, ERC20X_PATH).unwrap();
     let addr1 = deploy_contract(&mut db, bytecode, None).unwrap();
-    let addr2 = deploy_contract(&mut db, bytecode_x, None).unwrap();
+    // let addr2 = deploy_contract(&mut db, bytecode_x, None).unwrap();
 
     let selector_balance = get_selector_from_sig("balance_of");
     let selector_x_balance = get_selector_from_sig("x_balance_of");
@@ -45,20 +45,20 @@ fn erc20() {
     let mut complete_calldata_x_balance = selector_x_balance.to_vec();
     complete_calldata_x_balance.append(&mut calldata_x_balance);
 
-    info!("----------------------------------------------------------");
-    info!("-- MINT TX -----------------------------------------------");
-    info!("----------------------------------------------------------");
-    debug!(
-        "Tx Calldata:\n> {:#?}",
-        Bytes::from(complete_calldata_mint.clone())
-    );
-    match run_tx(&mut db, &addr1, complete_calldata_mint.clone()) {
-        Ok(res) => info!("{}", res),
-        Err(e) => {
-            error!("Error when executing tx! {:#?}", e);
-            panic!()
-        }
-    };
+    // info!("----------------------------------------------------------");
+    // info!("-- MINT TX -----------------------------------------------");
+    // info!("----------------------------------------------------------");
+    // debug!(
+    //     "Tx Calldata:\n> {:#?}",
+    //     Bytes::from(complete_calldata_mint.clone())
+    // );
+    // match run_tx(&mut db, &addr1, complete_calldata_mint.clone()) {
+    //     Ok(res) => info!("{}", res),
+    //     Err(e) => {
+    //         error!("Error when executing tx! {:#?}", e);
+    //         panic!()
+    //     }
+    // };
 
     info!("----------------------------------------------------------");
     info!("-- BALANCE OF TX -----------------------------------------");
@@ -75,18 +75,18 @@ fn erc20() {
         }
     };
 
-    info!("----------------------------------------------------------");
-    info!("-- X-CONTRACT BALANCE OF TX ------------------------------");
-    info!("----------------------------------------------------------");
-    debug!(
-        "Tx calldata:\n> {:#?}",
-        Bytes::from(complete_calldata_x_balance.clone())
-    );
-    match run_tx(&mut db, &addr2, complete_calldata_x_balance.clone()) {
-        Ok(res) => info!("{}", res),
-        Err(e) => {
-            error!("Error when executing tx! {:#?}", e);
-            panic!();
-        }
-    }
+    // info!("----------------------------------------------------------");
+    // info!("-- X-CONTRACT BALANCE OF TX ------------------------------");
+    // info!("----------------------------------------------------------");
+    // debug!(
+    //     "Tx calldata:\n> {:#?}",
+    //     Bytes::from(complete_calldata_x_balance.clone())
+    // );
+    // match run_tx(&mut db, &addr2, complete_calldata_x_balance.clone()) {
+    //     Ok(res) => info!("{}", res),
+    //     Err(e) => {
+    //         error!("Error when executing tx! {:#?}", e);
+    //         panic!();
+    //     }
+    // }
 }
