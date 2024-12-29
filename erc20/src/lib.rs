@@ -6,7 +6,7 @@ use core::default::Default;
 use contract_derive::{contract, payable, Event};
 use eth_riscv_runtime::types::Mapping;
 
-use alloy_core::primitives::{address, Address, U256};
+use alloy_core::primitives::{address, Address, U256, U64};
 
 extern crate alloc;
 use alloc::string::String;
@@ -41,21 +41,18 @@ pub struct Mint {
 
 #[contract]
 impl ERC20 {
-    pub fn new() -> Self {
+    pub fn new(to: Address, value: U256) -> Self {
+        let value = value.to::<u64>();
+
         // init the contract
         let erc20 = ERC20::default();
 
-        // pre-mint some tokens for `msg_sender()`
-        erc20.balances.write(
-            address!("000000000000000000000000000000000000000A"),
-            1_000_000_000,
-        );
-
-        // emit logs
+        // pre-mint some tokens
+        erc20.balances.write(to, value);
         log::emit(Transfer::new(
             address!("0000000000000000000000000000000000000000"),
-            address!("000000000000000000000000000000000000000A"),
-            1_000_000_000,
+            to,
+            value,
         ));
 
         // return the initialized contract

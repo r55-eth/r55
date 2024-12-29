@@ -28,17 +28,17 @@ pub fn deploy_contract(
 ) -> Result<Address> {
     // Craft initcode: [0xFF][codesize][bytecode][constructor_args]
     let codesize = U32::from(bytecode.len());
-    info!("CODESIZE: {}", codesize);
+    debug!("CODESIZE: {}", codesize);
 
     let mut init_code = Vec::new();
     init_code.push(0xff);
     init_code.extend_from_slice(&Bytes::from(codesize.to_be_bytes_vec()));
     init_code.extend_from_slice(&bytecode);
-    info!("INITCODE SIZE: {}", init_code.len());
     if let Some(args) = encoded_args {
+        debug!("ENCODED_ARGS: {:#?}", Bytes::from(args.clone()));
         init_code.extend_from_slice(&args);
     }
-    info!("INITCODE WITH ARGS SIZE: {}", init_code.len());
+    debug!("INITCODE SIZE: {}", init_code.len());
 
     // Run CREATE tx
     let mut evm = Evm::builder()
@@ -62,8 +62,10 @@ pub fn deploy_contract(
             logs,
             ..
         } => {
-            debug!("Deployed at addr: {:?}", addr);
-            debug!("Deployment logs: {:?}", logs);
+            info!(
+                "NEW DEPLOYMENT:\n> contract address: {:?}\n> logs: {:#?}",
+                addr, logs
+            );
             Ok(addr)
         }
         result => Err(Error::UnexpectedExecResult(result)),
@@ -123,19 +125,14 @@ fn riscv_context(frame: &Frame) -> Option<RVEmu> {
 
     let (code, calldata) = if frame.is_create() {
         let (code_size, init_code) = bytecode.split_at(4);
-        let code_size = U32::from_be_slice(code_size);
         let Some((0xFF, bytecode)) = init_code.split_first() else {
             warn!("NOT RISCV CONTRACT!");
             return None;
         };
-        debug!(
-            "CREATE CALLDATA: {:#?}",
-            &bytecode[code_size.to::<usize>()..init_code.len() - 33]
-        );
-        (
-            &bytecode[..code_size.to::<usize>()],
-            &bytecode[code_size.to::<usize>()..init_code.len() - 33],
-        )
+        let code_size = U32::from_be_slice(code_size).to::<usize>() - 1; // deduct control byte `0xFF`
+        let end_of_args = init_code.len() - 34; // deduct control byte + revm appends 1 empty (32 byte) word
+
+        (&bytecode[..code_size], &bytecode[code_size..end_of_args])
     } else if frame.is_call() {
         (bytecode, interpreter.contract.input.as_ref())
     } else {
@@ -163,7 +160,7 @@ pub fn handle_register<EXT, DB: Database>(handler: &mut EvmHandler<'_, EXT, DB>)
     handler.execution.call = Arc::new(move |ctx, inputs| {
         let result = old_handle(ctx, inputs);
         if let Ok(FrameOrResult::Frame(frame)) = &result {
-            debug!("Creating new CALL frame");
+            trace!("Creating new CALL frame");
             call_stack_inner.borrow_mut().push(riscv_context(frame));
         }
         result
@@ -175,8 +172,7 @@ pub fn handle_register<EXT, DB: Database>(handler: &mut EvmHandler<'_, EXT, DB>)
     handler.execution.create = Arc::new(move |ctx, inputs| {
         let result = old_handle(ctx, inputs);
         if let Ok(FrameOrResult::Frame(frame)) = &result {
-            debug!("Creating new CREATE frame");
-            // debug!("CREATE BYTECODE: {}", frame.interpreter().bytecode);
+            trace!("Creating new CREATE frame");
             call_stack_inner.borrow_mut().push(riscv_context(frame));
         }
         result

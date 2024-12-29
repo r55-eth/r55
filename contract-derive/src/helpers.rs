@@ -151,11 +151,12 @@ pub fn generate_deployment_code(
     let constructor_code = match constructor {
         Some(method) => {
             let method_info = MethodInfo::from(method);
-            let (arg_names, arg_types) = get_arg_props(false, &method_info);
+            let (arg_names, arg_types) = get_arg_props_all(&method_info);
             quote! {
-                impl #struct_name {
-                    #method
-                }
+                impl #struct_name { #method }
+
+                // Get encoded constructor args
+                let calldata = eth_riscv_runtime::msg_data();
 
                 let (#(#arg_names),*) = <(#(#arg_types),*)>::abi_decode(&calldata, true)
                     .expect("Failed to decode constructor args");
@@ -173,10 +174,6 @@ pub fn generate_deployment_code(
 
         #[no_mangle]
         pub extern "C" fn main() -> ! {
-            // Get initcode + check valid size
-            let calldata = eth_riscv_runtime::msg_data();
-
-            // Initialize contract
             #constructor_code
 
             // Return runtime code
