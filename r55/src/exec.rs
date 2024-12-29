@@ -46,7 +46,6 @@ pub fn deploy_contract(
         .modify_tx_env(|tx| {
             tx.caller = address!("000000000000000000000000000000000000000A");
             tx.transact_to = TransactTo::Create;
-            // tx.data = bytecode;
             tx.data = Bytes::from(init_code);
             tx.value = U256::from(0);
         })
@@ -130,7 +129,7 @@ fn riscv_context(frame: &Frame) -> Option<RVEmu> {
             return None;
         };
         let code_size = U32::from_be_slice(code_size).to::<usize>() - 1; // deduct control byte `0xFF`
-        let end_of_args = init_code.len() - 34; // deduct control byte + revm appends 1 empty (32 byte) word
+        let end_of_args = init_code.len() - 34; // deduct control byte + ignore empty (32 byte) word appended by revm
 
         (&bytecode[..code_size], &bytecode[code_size..end_of_args])
     } else if frame.is_call() {
@@ -315,7 +314,7 @@ fn execute_riscv(
                     Syscall::SLoad => {
                         let key: u64 = emu.cpu.xregs.read(10);
                         debug!(
-                            "> SLOAD ({}) - Key: {}",
+                            "> SLOAD ({}) - Key: {:#02x}",
                             interpreter.contract.target_address, key
                         );
                         match host.sload(interpreter.contract.target_address, U256::from(key)) {
@@ -350,7 +349,7 @@ fn execute_riscv(
                         let third: u64 = emu.cpu.xregs.read(13);
                         let fourth: u64 = emu.cpu.xregs.read(14);
                         debug!(
-                            "> SSTORE ({}) - Key: {}, Value: {}",
+                            "> SSTORE ({}) - Key: {:#02x}, Value: {}",
                             interpreter.contract.target_address,
                             key,
                             U256::from_limbs([first, second, third, fourth])
