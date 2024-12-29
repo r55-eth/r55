@@ -63,7 +63,7 @@ pub fn deploy_contract(
             ..
         } => {
             info!(
-                "NEW DEPLOYMENT:\n> contract address: {:?}\n> logs: {:#?}",
+                "NEW DEPLOYMENT:\n> contract address: {:?}\n> logs: {:#?}\n",
                 addr, logs
             );
             Ok(addr)
