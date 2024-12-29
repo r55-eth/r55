@@ -1,4 +1,4 @@
-use alloy_core::primitives::Keccak256;
+use alloy_core::primitives::{Keccak256, U32};
 use core::{cell::RefCell, ops::Range};
 use eth_riscv_interpreter::setup_from_elf;
 use eth_riscv_syscalls::Syscall;
@@ -13,7 +13,7 @@ use revm::{
 };
 use rvemu::{emulator::Emulator, exception::Exception};
 use std::{collections::BTreeMap, rc::Rc, sync::Arc};
-use tracing::{debug, trace, warn};
+use tracing::{debug, info, trace, warn};
 
 use super::error::{Error, Result, TxResult};
 use super::gas;
@@ -21,13 +21,32 @@ use super::syscall_gas;
 
 const R5_REST_OF_RAM_INIT: u64 = 0x80300000; // Defined at `r5-rust-rt.x`
 
-pub fn deploy_contract(db: &mut InMemoryDB, bytecode: Bytes) -> Result<Address> {
+pub fn deploy_contract(
+    db: &mut InMemoryDB,
+    bytecode: Bytes,
+    encoded_args: Option<Vec<u8>>,
+) -> Result<Address> {
+    // Craft initcode: [0xFF][codesize][bytecode][constructor_args]
+    let codesize = U32::from(bytecode.len());
+    debug!("CODESIZE: {}", codesize);
+
+    let mut init_code = Vec::new();
+    init_code.push(0xff);
+    init_code.extend_from_slice(&Bytes::from(codesize.to_be_bytes_vec()));
+    init_code.extend_from_slice(&bytecode);
+    if let Some(args) = encoded_args {
+        debug!("ENCODED_ARGS: {:#?}", Bytes::from(args.clone()));
+        init_code.extend_from_slice(&args);
+    }
+    debug!("INITCODE SIZE: {}", init_code.len());
+
+    // Run CREATE tx
     let mut evm = Evm::builder()
         .with_db(db)
         .modify_tx_env(|tx| {
             tx.caller = address!("000000000000000000000000000000000000000A");
             tx.transact_to = TransactTo::Create;
-            tx.data = bytecode;
+            tx.data = Bytes::from(init_code);
             tx.value = U256::from(0);
         })
         .append_handler_register(handle_register)
@@ -39,9 +58,13 @@ pub fn deploy_contract(db: &mut InMemoryDB, bytecode: Bytes) -> Result<Address> 
     match result {
         ExecutionResult::Success {
             output: Output::Create(_value, Some(addr)),
+            logs,
             ..
         } => {
-            debug!("Deployed at addr: {:?}", addr);
+            info!(
+                "NEW DEPLOYMENT:\n> contract address: {:?}\n> logs: {:#?}\n",
+                addr, logs
+            );
             Ok(addr)
         }
         result => Err(Error::UnexpectedExecResult(result)),
@@ -95,10 +118,27 @@ fn riscv_context(frame: &Frame) -> Option<RVEmu> {
     let interpreter = frame.interpreter();
 
     let Some((0xFF, bytecode)) = interpreter.bytecode.split_first() else {
+        warn!("NOT RISCV CONTRACT!");
         return None;
     };
 
-    match setup_from_elf(bytecode, &interpreter.contract.input) {
+    let (code, calldata) = if frame.is_create() {
+        let (code_size, init_code) = bytecode.split_at(4);
+        let Some((0xFF, bytecode)) = init_code.split_first() else {
+            warn!("NOT RISCV CONTRACT!");
+            return None;
+        };
+        let code_size = U32::from_be_slice(code_size).to::<usize>() - 1; // deduct control byte `0xFF`
+        let end_of_args = init_code.len() - 34; // deduct control byte + ignore empty (32 byte) word appended by revm
+
+        (&bytecode[..code_size], &bytecode[code_size..end_of_args])
+    } else if frame.is_call() {
+        (bytecode, interpreter.contract.input.as_ref())
+    } else {
+        todo!("Support EOF")
+    };
+
+    match setup_from_elf(code, calldata) {
         Ok(emu) => Some(RVEmu {
             emu,
             returned_data_destiny: None,
@@ -119,6 +159,7 @@ pub fn handle_register<EXT, DB: Database>(handler: &mut EvmHandler<'_, EXT, DB>)
     handler.execution.call = Arc::new(move |ctx, inputs| {
         let result = old_handle(ctx, inputs);
         if let Ok(FrameOrResult::Frame(frame)) = &result {
+            trace!("Creating new CALL frame");
             call_stack_inner.borrow_mut().push(riscv_context(frame));
         }
         result
@@ -130,6 +171,7 @@ pub fn handle_register<EXT, DB: Database>(handler: &mut EvmHandler<'_, EXT, DB>)
     handler.execution.create = Arc::new(move |ctx, inputs| {
         let result = old_handle(ctx, inputs);
         if let Ok(FrameOrResult::Frame(frame)) = &result {
+            trace!("Creating new CREATE frame");
             call_stack_inner.borrow_mut().push(riscv_context(frame));
         }
         result
@@ -272,7 +314,7 @@ fn execute_riscv(
                     Syscall::SLoad => {
                         let key: u64 = emu.cpu.xregs.read(10);
                         debug!(
-                            "> SLOAD ({}) - Key: {}",
+                            "> SLOAD ({}) - Key: {:#02x}",
                             interpreter.contract.target_address, key
                         );
                         match host.sload(interpreter.contract.target_address, U256::from(key)) {
@@ -306,6 +348,12 @@ fn execute_riscv(
                         let second: u64 = emu.cpu.xregs.read(12);
                         let third: u64 = emu.cpu.xregs.read(13);
                         let fourth: u64 = emu.cpu.xregs.read(14);
+                        debug!(
+                            "> SSTORE ({}) - Key: {:#02x}, Value: {}",
+                            interpreter.contract.target_address,
+                            key,
+                            U256::from_limbs([first, second, third, fourth])
+                        );
                         let result = host.sstore(
                             interpreter.contract.target_address,
                             U256::from(key),

@@ -41,6 +41,24 @@ pub struct Mint {
 
 #[contract]
 impl ERC20 {
+    pub fn new(to: Address, value: U256) -> Self {
+        let value = value.to::<u64>();
+
+        // init the contract
+        let erc20 = ERC20::default();
+
+        // pre-mint some tokens
+        erc20.balances.write(to, value);
+        log::emit(Transfer::new(
+            address!("0000000000000000000000000000000000000000"),
+            to,
+            value,
+        ));
+
+        // return the initialized contract
+        erc20
+    }
+
     pub fn balance_of(&self, owner: Address) -> u64 {
         self.balances.read(owner)
     }
