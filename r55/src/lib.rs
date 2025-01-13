@@ -116,8 +116,9 @@ mod tests {
     use crate::{compile_runtime, compile_with_prefix, test_utils::*};
 
     use alloy_core::hex::{self, ToHexExt};
+    use alloy_core::primitives::address;
     use alloy_sol_types::SolValue;
-    use revm::primitives::address;
+    use tracing::{error, info};
 
     const ERC20_PATH: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/../erc20");
 
@@ -128,6 +129,7 @@ mod tests {
         const CONTRACT_ADDR: Address = address!("0d4a11d5EEaaC28EC3F61d100daF4d40471f1852");
         let mut db = InMemoryDB::default();
 
+        // Setup contract + define fn selectors
         let bytecode = compile_with_prefix(compile_runtime, ERC20_PATH).unwrap();
         add_contract_to_db(&mut db, CONTRACT_ADDR, bytecode);
 
@@ -137,84 +139,118 @@ mod tests {
         let selector_transfer = get_selector_from_sig("transfer");
         let selector_approve = get_selector_from_sig("approve");
         let selector_allowance = get_selector_from_sig("allowance");
+
+        // Setup addresses
         let alice: Address = address!("000000000000000000000000000000000000000A");
         let bob: Address = address!("000000000000000000000000000000000000000B");
         let carol: Address = address!("000000000000000000000000000000000000000C");
-        let value_mint: u64 = 42;
-        let value_transfer: u64 = 21;
-        let mut calldata_alice_balance = alice.abi_encode();
-        let mut calldata_bob_balance = bob.abi_encode();
-        let mut calldata_mint = (alice, value_mint).abi_encode();
-        let mut calldata_transfer = (bob, value_transfer).abi_encode();
-        let mut calldata_approve = (carol, value_transfer).abi_encode();
-        let mut calldata_allowance = (alice, carol).abi_encode();
 
+        // Add balance to Alice's account for gas fees
         add_balance_to_db(&mut db, alice, 1e18 as u64);
 
-        let mut complete_calldata_mint = selector_mint.to_vec();
-        complete_calldata_mint.append(&mut calldata_mint);
-        let mut complete_calldata_alice_balance = selector_balance.to_vec();
-        complete_calldata_alice_balance.append(&mut calldata_alice_balance);
-        let mut complete_calldata_bob_balance = selector_balance.to_vec();
-        complete_calldata_bob_balance.append(&mut calldata_bob_balance);
-        let mut complete_calldata_transfer = selector_transfer.to_vec();
-        complete_calldata_transfer.append(&mut calldata_transfer);
-        let mut complete_calldata_approve = selector_approve.to_vec();
-        complete_calldata_approve.append(&mut calldata_approve);
-        let mut complete_calldata_allowance = selector_allowance.to_vec();
-        complete_calldata_allowance.append(&mut calldata_allowance);
-
         // Mint 42 tokens to Alice
-        let mint_result = run_tx(&mut db, &CONTRACT_ADDR, complete_calldata_mint.clone()).unwrap();
+        let value_mint = U256::from(42e18);
+        let mut calldata_mint = (alice, value_mint).abi_encode();
+        let mut complete_mint_calldata = selector_mint.to_vec();
+        complete_mint_calldata.append(&mut calldata_mint);
+        let mint_result = run_tx(&mut db, &CONTRACT_ADDR, complete_mint_calldata).unwrap();
+
         assert!(mint_result.status, "Mint transaction failed");
 
         // Check total supply
-        let total_supply = run_tx(&mut db, &CONTRACT_ADDR, selector_total_supply.to_vec()).unwrap();
+        let total_supply_result = run_tx(&mut db, &CONTRACT_ADDR, selector_total_supply.to_vec())
+            .expect("Error executing tx")
+            .output;
+
         assert_eq!(
-            total_supply.output,
-            Uint::from(42).abi_encode(),
+            U256::from_be_bytes::<32>(total_supply_result.as_slice().try_into().unwrap()),
+            value_mint,
             "Incorrect total supply"
         );
 
         // Check Alice's balance
-        let alice_balance = run_tx(
+        let mut calldata_alice_balance = alice.abi_encode();
+        let mut complete_calldata_alice_balance = selector_balance.to_vec();
+        complete_calldata_alice_balance.append(&mut calldata_alice_balance);
+        let alice_balance_result = run_tx(
             &mut db,
             &CONTRACT_ADDR,
             complete_calldata_alice_balance.clone(),
         )
-        .unwrap();
+        .expect("Error executing tx")
+        .output;
+
         assert_eq!(
-            alice_balance.output,
-            Uint::from(42).abi_encode(),
+            U256::from_be_bytes::<32>(alice_balance_result.as_slice().try_into().unwrap()),
+            value_mint,
             "Incorrect balance"
         );
 
         // Transfer 21 tokens from Alice to Bob
+        let value_transfer = U256::from(21e18);
+        let mut calldata_transfer = (bob, value_transfer).abi_encode();
+        let mut complete_calldata_transfer = selector_transfer.to_vec();
+        complete_calldata_transfer.append(&mut calldata_transfer);
         let transfer_result =
             run_tx(&mut db, &CONTRACT_ADDR, complete_calldata_transfer.clone()).unwrap();
         assert!(transfer_result.status, "Transfer transaction failed");
 
-        // Check Alice's and Bob's balance
-        let alice_balance = run_tx(
+        // Check Alice's balance
+        let alice_balance_result = run_tx(
             &mut db,
             &CONTRACT_ADDR,
             complete_calldata_alice_balance.clone(),
         )
-        .unwrap()
+        .expect("Error executing tx")
         .output;
-        assert_eq!(alice_balance, Uint::from(21).abi_encode());
-        let bob_balance = run_tx(&mut db, &CONTRACT_ADDR, complete_calldata_bob_balance).unwrap();
-        assert_eq!(bob_balance.output, Uint::from(21).abi_encode());
 
-        // Approve Carol to spend 21 token from Alice
+        assert_eq!(
+            U256::from_be_bytes::<32>(alice_balance_result.as_slice().try_into().unwrap()),
+            value_mint - value_transfer,
+            "Incorrect balance"
+        );
+
+        // Check Bob's balance
+        let mut calldata_bob_balance = bob.abi_encode();
+        let mut complete_calldata_bob_balance = selector_balance.to_vec();
+        complete_calldata_bob_balance.append(&mut calldata_bob_balance);
+        let bob_balance_result = run_tx(
+            &mut db,
+            &CONTRACT_ADDR,
+            complete_calldata_bob_balance.clone(),
+        )
+        .expect("Error executing tx")
+        .output;
+
+        assert_eq!(
+            U256::from_be_bytes::<32>(bob_balance_result.as_slice().try_into().unwrap()),
+            value_transfer,
+            "Incorrect balance"
+        );
+
+        // Approve Carol to spend 10 tokens from Alice
+        let value_approve = U256::from(10e18);
+        let mut calldata_approve = (carol, value_approve).abi_encode();
+        let mut complete_calldata_approve = selector_approve.to_vec();
+        complete_calldata_approve.append(&mut calldata_approve);
         let approve_result =
             run_tx(&mut db, &CONTRACT_ADDR, complete_calldata_approve.clone()).unwrap();
         assert!(approve_result.status, "Approve transaction failed");
 
         // Check Carol's allowance
-        let allowance_res =
-            run_tx(&mut db, &CONTRACT_ADDR, complete_calldata_allowance.clone()).unwrap();
-        assert_eq!(allowance_res.output, Uint::from(21).abi_encode());
+        let mut calldata_allowance = (alice, carol).abi_encode();
+        let mut complete_calldata_allowance = selector_allowance.to_vec();
+        complete_calldata_allowance.append(&mut calldata_allowance);
+        let carol_allowance_result =
+            run_tx(&mut db, &CONTRACT_ADDR, complete_calldata_allowance.clone())
+                .expect("Error executing tx")
+                .output;
+
+        assert_eq!(
+            U256::from_be_bytes::<32>(carol_allowance_result.as_slice().try_into().unwrap()),
+            value_approve,
+            "Incorrect balance"
+        );
     }
 
     #[test]
@@ -288,6 +324,93 @@ mod tests {
             amount,
             U256::from(50),
             "Incorrect transfer amount in transfer log"
+        );
+    }
+
+    #[test]
+    fn test_storage_layout() {
+        initialize_logger();
+
+        const CONTRACT_ADDR: Address = address!("0d4a11d5EEaaC28EC3F61d100daF4d40471f1852");
+        let mut db = InMemoryDB::default();
+
+        // Setup contract
+        let bytecode = compile_with_prefix(compile_runtime, ERC20_PATH).unwrap();
+        add_contract_to_db(&mut db, CONTRACT_ADDR, bytecode);
+
+        // Setup addresses
+        let alice: Address = address!("000000000000000000000000000000000000000A");
+        let bob: Address = address!("000000000000000000000000000000000000000B");
+        let carol: Address = address!("000000000000000000000000000000000000000C");
+
+        // Add balance to Alice's account for gas fees
+        add_balance_to_db(&mut db, alice, 1e18 as u64);
+
+        // Mint tokens to Alice
+        let mint_alice = U256::from(10e18);
+        let selector_mint = get_selector_from_sig("mint");
+        let mut calldata_mint = (alice, mint_alice).abi_encode();
+        let mut complete_mint_calldata = selector_mint.to_vec();
+        complete_mint_calldata.append(&mut calldata_mint);
+
+        let mint_result = run_tx(&mut db, &CONTRACT_ADDR, complete_mint_calldata).unwrap();
+        assert!(mint_result.status, "Mint transaction failed");
+
+        // Mint tokens to Bob
+        let mint_bob = U256::from(20e18);
+        let mut calldata_mint = (bob, mint_bob).abi_encode();
+        let mut complete_mint_calldata = selector_mint.to_vec();
+        complete_mint_calldata.append(&mut calldata_mint);
+
+        let mint_result = run_tx(&mut db, &CONTRACT_ADDR, complete_mint_calldata).unwrap();
+        assert!(mint_result.status, "Mint transaction failed");
+
+        // Approve Carol to spend 10 tokens from Alice
+        let allowance_carol = U256::from(5e18);
+        let selector_approve = get_selector_from_sig("approve");
+        let mut calldata_approve = (carol, allowance_carol).abi_encode();
+        let mut complete_calldata_approve = selector_approve.to_vec();
+        complete_calldata_approve.append(&mut calldata_approve);
+        let approve_result = run_tx(&mut db, &CONTRACT_ADDR, complete_calldata_approve).unwrap();
+        assert!(approve_result.status, "Approve transaction failed");
+
+        // EXPECTED STORAGE LAYOUT:
+        //
+        // pub struct ERC20 {
+        //     total_supply: Slot<U256>,                                Slot: 0
+        //     balances: Mapping<Address, U256>,                        Slot: keccak256(address, 1)
+        //     allowances: Mapping<Address, Mapping<Address, U256>>,    Slot: keccak256(address, keccak256(address, 2))
+        // }
+
+        // Assert `total_supply` is set to track the correct slot
+        let expected_slot = U256::from(0);
+        assert_eq!(
+            mint_alice + mint_bob,
+            read_db_slot(&mut db, CONTRACT_ADDR, expected_slot)
+        );
+
+        let balances_id = U256::from(1);
+        // Assert `balances[alice]` is set to track the correct slot
+        let expected_slot = get_mapping_slot(alice.abi_encode(), balances_id);
+        assert_eq!(
+            mint_alice,
+            read_db_slot(&mut db, CONTRACT_ADDR, expected_slot)
+        );
+
+        // Assert `balances[bob]` is set to track the correct slot
+        let expected_slot = get_mapping_slot(bob.abi_encode(), balances_id);
+        assert_eq!(
+            mint_bob,
+            read_db_slot(&mut db, CONTRACT_ADDR, expected_slot)
+        );
+
+        let allowances_id = U256::from(2);
+        // Assert `allowance[alice][carol]` is set to track the correct slot
+        let id = get_mapping_slot(alice.abi_encode(), allowances_id);
+        let expected_slot = get_mapping_slot(carol.abi_encode(), id);
+        assert_eq!(
+            allowance_carol,
+            read_db_slot(&mut db, CONTRACT_ADDR, expected_slot)
         );
     }
 }

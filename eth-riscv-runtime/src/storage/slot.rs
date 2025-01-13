@@ -1,18 +1,18 @@
 use super::*;
 
-use core::ops::{Add, AddAssign, Deref, Sub, SubAssign};
+use core::ops::{Add, AddAssign, Sub, SubAssign};
 
 /// Wrapper around `alloy::primitives` that can be written in a single slot (single EVM word).
 #[derive(Default)]
 pub struct Slot<V> {
-    id: u64,
+    id: U256,
     _pd: PhantomData<V>,
 }
 
 impl<V> StorageLayout for Slot<V> {
-    fn allocate(id: u64) -> Self {
+    fn allocate(first: u64, second: u64, third: u64, fourth: u64) -> Self {
         Self {
-            id,
+            id: U256::from_limbs([first, second, third, fourth]),
             _pd: PhantomData::default(),
         }
     }

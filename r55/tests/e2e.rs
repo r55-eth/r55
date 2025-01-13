@@ -1,4 +1,4 @@
-use alloy_primitives::Bytes;
+use alloy_primitives::{Bytes, U256};
 use alloy_sol_types::SolValue;
 use r55::{
     compile_deploy, compile_with_prefix,
@@ -30,7 +30,7 @@ fn erc20() {
     let selector_x_balance = get_selector_from_sig("x_balance_of");
     let selector_mint = get_selector_from_sig("mint");
     let alice: Address = address!("000000000000000000000000000000000000000A");
-    let value_mint: u64 = 42;
+    let value_mint = U256::from(42e18);
     let mut calldata_balance = alice.abi_encode();
     let mut calldata_mint = (alice, value_mint).abi_encode();
     let mut calldata_x_balance = (alice, addr1).abi_encode();
@@ -60,7 +60,6 @@ fn erc20() {
             panic!()
         }
     };
-
     info!("----------------------------------------------------------");
     info!("-- TOTAL SUPPLY ------------------------------------------");
     info!("----------------------------------------------------------");
@@ -103,3 +102,4 @@ fn erc20() {
         }
     }
 }
+ 

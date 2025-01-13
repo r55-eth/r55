@@ -1,5 +1,5 @@
 extern crate proc_macro;
-use alloy_core::primitives::keccak256;
+use alloy_core::primitives::{keccak256, U256};
 use alloy_sol_types::SolValue;
 use proc_macro::TokenStream;
 use quote::{format_ident, quote};
@@ -355,9 +355,12 @@ pub fn storage(_attr: TokenStream, input: TokenStream) -> TokenStream {
     });
 
     // Generate initialization code for each field
-    let init_fields = fields.iter().enumerate().map(|(slot, f)| {
+    // TODO: PoC uses a naive strategy. Enhance to support complex types like tuples or custom structs.
+    let init_fields = fields.iter().enumerate().map(|(i, f)| {
         let name = &f.ident;
-        quote! { #name: StorageLayout::allocate(#slot as u64) }
+        let slot = U256::from(i);
+        let [limb0, limb1, limb2, limb3] = slot.as_limbs();
+        quote! { #name: StorageLayout::allocate(#limb0, #limb1, #limb2, #limb3) }
     });
 
     let expanded = quote! {
