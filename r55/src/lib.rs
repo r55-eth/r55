@@ -120,7 +120,6 @@ mod tests {
     use alloy_core::hex::{self, ToHexExt};
     use alloy_core::primitives::address;
     use alloy_sol_types::SolValue;
-    use tracing::{error, info};
 
     const ERC20_PATH: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/../erc20");
 
