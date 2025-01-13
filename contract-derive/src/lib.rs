@@ -4,11 +4,12 @@ use alloy_sol_types::SolValue;
 use proc_macro::TokenStream;
 use quote::{format_ident, quote};
 use syn::{
-    parse_macro_input, Data, DeriveInput, Fields, FnArg, ImplItem, ImplItemMethod, ItemImpl,
-    ItemTrait, ReturnType, TraitItem,
+    parse_macro_input, Data, DeriveInput, Fields, ImplItem, ImplItemMethod, ItemImpl, ItemTrait,
+    ReturnType, TraitItem,
 };
 
 mod helpers;
+use crate::helpers::MethodInfo;
 
 #[proc_macro_derive(Event, attributes(indexed))]
 pub fn event_derive(input: TokenStream) -> TokenStream {
@@ -104,34 +105,31 @@ pub fn contract(_attr: TokenStream, item: TokenStream) -> TokenStream {
         panic!("Expected a struct.");
     };
 
+    let mut constructor = None;
     let mut public_methods: Vec<&ImplItemMethod> = Vec::new();
 
-    // Iterate over the items in the impl block to find pub methods
+    // Iterate over the items in the impl block to find pub methods + constructor
     for item in input.items.iter() {
         if let ImplItem::Method(method) = item {
-            if let syn::Visibility::Public(_) = method.vis {
+            if method.sig.ident == "new" {
+                constructor = Some(method);
+            } else if let syn::Visibility::Public(_) = method.vis {
                 public_methods.push(method);
             }
         }
     }
 
-    let match_arms: Vec<_> = public_methods.iter().enumerate().map(|(_, method)| {
+    let match_arms: Vec<_> = public_methods.iter().map(|method| {
         let method_name = &method.sig.ident;
         let method_selector = u32::from_be_bytes(
             keccak256(
                 method_name.to_string()
             )[..4].try_into().unwrap_or_default()
         );
-        let arg_types: Vec<_> = method.sig.inputs.iter().skip(1).map(|arg| {
-            if let FnArg::Typed(pat_type) = arg {
-                let ty = &*pat_type.ty;
-                quote! { #ty }
-            } else {
-                panic!("Expected typed arguments");
-            }
-        }).collect();
+        let method_info = MethodInfo::from(*method);
+        let (arg_names, arg_types) = helpers::get_arg_props_skip_first(&method_info);
 
-        let arg_names: Vec<_> = (0..method.sig.inputs.len() - 1).map(|i| format_ident!("arg{}", i)).collect();
+        // Check if there are payable methods
         let checks = if !is_payable(&method) {
             quote! {
                 if eth_riscv_runtime::msg_value() > U256::from(0) {
@@ -141,6 +139,7 @@ pub fn contract(_attr: TokenStream, item: TokenStream) -> TokenStream {
         } else {
             quote! {}
         };
+
         // Check if the method has a return type
         let return_handling = match &method.sig.output {
             ReturnType::Default => {
@@ -156,7 +155,7 @@ pub fn contract(_attr: TokenStream, item: TokenStream) -> TokenStream {
                     let result_bytes = result.abi_encode();
                     let result_size = result_bytes.len() as u64;
                     let result_ptr = result_bytes.as_ptr() as u64;
-                    return_riscv(result_ptr, result_size);
+                    eth_riscv_runtime::return_riscv(result_ptr, result_size);
                 }
             }
         };
@@ -225,9 +224,23 @@ pub fn contract(_attr: TokenStream, item: TokenStream) -> TokenStream {
     let interface_name = format_ident!("I{}", struct_name);
     let interface = helpers::generate_interface(&public_methods, &interface_name);
 
+    // Generate initcode for deployments
+    let deployment_code = helpers::generate_deployment_code(struct_name, constructor);
+
     // Generate the complete output with module structure
     let output = quote! {
+        use eth_riscv_runtime::*;
+        use alloy_sol_types::SolValue;
+
+        // Deploy module
+        #[cfg(feature = "deploy")]
+            pub mod deploy {
+            use super::*;
+            #deployment_code
+        }
+
         // Public interface module
+        #[cfg(not(feature = "deploy"))]
         pub mod interface {
             use super::*;
             #interface
@@ -235,14 +248,13 @@ pub fn contract(_attr: TokenStream, item: TokenStream) -> TokenStream {
 
         // Generate the call method implementation privately
         // only when not in `interface-only` mode
-        #[cfg(not(feature = "interface-only"))]
+        #[cfg(not(any(feature = "deploy", feature = "interface-only")))]
         mod implementation {
             use super::*;
             use alloy_sol_types::SolValue;
             use eth_riscv_runtime::*;
 
             #input
-
             #emit_helper
 
             impl Contract for #struct_name {
@@ -271,11 +283,16 @@ pub fn contract(_attr: TokenStream, item: TokenStream) -> TokenStream {
             }
         }
 
-        // Always export the interface
+        // Export initcode when `deploy` mode
+        #[cfg(feature = "deploy")]
+        pub use deploy::*;
+
+        // Always export the interface when not deploying
+        #[cfg(not(feature = "deploy"))]
         pub use interface::*;
 
-        // Only export contract impl when not in `interface-only` mode
-        #[cfg(not(feature = "interface-only"))]
+        // Only export contract impl when not in `interface-only` or `deploy` modes
+        #[cfg(not(any(feature = "deploy", feature = "interface-only")))]
         pub use implementation::*;
     };
 

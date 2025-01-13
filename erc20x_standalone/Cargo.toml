@@ -3,6 +3,10 @@ name = "erc20x_standalone"
 version = "0.1.0"
 edition = "2021"
 
+[features]
+default = []
+deploy = []
+
 [dependencies]
 contract-derive = { path = "../contract-derive" }
 eth-riscv-runtime = { path = "../eth-riscv-runtime" }
@@ -16,7 +20,8 @@ path = "src/lib.rs"
 
 [[bin]]
 name = "deploy"
-path = "src/deploy.rs"
+path = "src/lib.rs"
+required-features = ["deploy"]
 
 [profile.release]
 lto = true

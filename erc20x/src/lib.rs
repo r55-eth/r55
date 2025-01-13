@@ -4,10 +4,9 @@
 use core::default::Default;
 
 use alloy_core::primitives::{Address, U256};
-use contract_derive::{contract, interface};
+use contract_derive::contract;
 
 extern crate alloc;
-use alloc::{string::String, vec::Vec};
 
 use erc20::IERC20;
 

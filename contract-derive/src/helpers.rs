@@ -1,6 +1,4 @@
 use alloy_core::primitives::keccak256;
-use alloy_sol_types::SolValue;
-use proc_macro::TokenStream;
 use quote::{format_ident, quote};
 use syn::{FnArg, Ident, ImplItemMethod, ReturnType, TraitItemMethod};
 
@@ -15,7 +13,7 @@ impl<'a> From<&'a ImplItemMethod> for MethodInfo<'a> {
     fn from(method: &'a ImplItemMethod) -> Self {
         Self {
             name: &method.sig.ident,
-            args: method.sig.inputs.iter().skip(1).cloned().collect(),
+            args: method.sig.inputs.iter().cloned().collect(),
             return_type: &method.sig.output,
         }
     }
@@ -25,13 +23,41 @@ impl<'a> From<&'a TraitItemMethod> for MethodInfo<'a> {
     fn from(method: &'a TraitItemMethod) -> Self {
         Self {
             name: &method.sig.ident,
-            args: method.sig.inputs.iter().skip(1).cloned().collect(),
+            args: method.sig.inputs.iter().cloned().collect(),
             return_type: &method.sig.output,
         }
     }
 }
 
-// Helper function to generate intercate impl from user-defined methods
+// Helper function to get the parameter names + types of a method
+fn get_arg_props<'a>(
+    skip_first_arg: bool,
+    method: &'a MethodInfo<'a>,
+) -> (Vec<Ident>, Vec<&syn::Type>) {
+    method
+        .args
+        .iter()
+        .skip(if skip_first_arg { 1 } else { 0 })
+        .enumerate()
+        .map(|(i, arg)| {
+            if let FnArg::Typed(pat_type) = arg {
+                (format_ident!("arg{}", i), &*pat_type.ty)
+            } else {
+                panic!("Expected typed arguments");
+            }
+        })
+        .unzip()
+}
+
+pub fn get_arg_props_skip_first<'a>(method: &'a MethodInfo<'a>) -> (Vec<Ident>, Vec<&syn::Type>) {
+    get_arg_props(true, method)
+}
+
+pub fn get_arg_props_all<'a>(method: &'a MethodInfo<'a>) -> (Vec<Ident>, Vec<&syn::Type>) {
+    get_arg_props(false, method)
+}
+
+// Helper function to generate interface impl from user-defined methods
 pub fn generate_interface<T>(
     methods: &[&T],
     interface_name: &Ident,
@@ -44,7 +70,6 @@ where
     // Generate implementation
     let method_impls = methods.iter().map(|method| {
         let name = method.name;
-        let args = &method.args;
         let return_type = method.return_type;
         let method_selector = u32::from_be_bytes(
             keccak256(name.to_string())[..4]
@@ -52,19 +77,7 @@ where
                 .unwrap_or_default(),
         );
 
-        // Simply use index for arg names, and extract types
-        let (arg_names, arg_types): (Vec<_>, Vec<_>) = args
-            .iter()
-            .enumerate()
-            .map(|(i, arg)| {
-                if let FnArg::Typed(pat_type) = arg {
-                    let ty = &*pat_type.ty;
-                    (format_ident!("arg{}", i), ty)
-                } else {
-                    panic!("Expected typed arguments");
-                }
-            })
-            .unzip();
+        let (arg_names, arg_types) = get_arg_props_skip_first(method);
 
         let calldata = if arg_names.is_empty() {
             quote! {
@@ -125,6 +138,31 @@ where
             }
 
             #(#method_impls)*
+        }
+    }
+}
+
+// Helper function to generate the deployment code
+pub fn generate_deployment_code(
+    _struct_name: &Ident,
+    constructor: Option<&ImplItemMethod>,
+) -> quote::__private::TokenStream {
+    quote! {
+        use alloc::vec::Vec;
+
+        #[no_mangle]
+        pub extern "C" fn main() -> ! {
+            // TODO: figure out constructor
+
+            let runtime: &[u8] = include_bytes!("../target/riscv64imac-unknown-none-elf/release/runtime");
+            let mut prepended_runtime = Vec::with_capacity(1 + runtime.len());
+            prepended_runtime.push(0xff);
+            prepended_runtime.extend_from_slice(runtime);
+
+            let prepended_runtime_slice: &[u8] = &prepended_runtime;
+            let result_ptr = prepended_runtime_slice.as_ptr() as u64;
+            let result_len = prepended_runtime_slice.len() as u64;
+            eth_riscv_runtime::return_riscv(result_ptr, result_len);
         }
     }
 }
