@@ -4,7 +4,7 @@
 use core::default::Default;
 
 use contract_derive::{contract, payable, storage, Event};
-use eth_riscv_runtime::storage::{Mapping, Slot, StorageLayout};
+use eth_riscv_runtime::types::{Mapping, Slot, StorageLayout};
 
 use alloy_core::primitives::{address, Address, U256};
 

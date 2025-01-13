@@ -17,7 +17,7 @@ pub use slot::Slot;
 /// A trait for storage types that require a dedicated slot in the storage layout
 // TODO: enhance `storage` macro to handle complex types (like tuples or custom structs)
 pub trait StorageLayout {
-    fn allocate(limb0: u64, limb1: u64, limb2: u64, limb3: u64) -> Self;
+    fn allocate(first: u64, second: u64, third: u64, fourth: u64) -> Self;
 }
 
 /// A trait for types that can be read from and written to storage slots

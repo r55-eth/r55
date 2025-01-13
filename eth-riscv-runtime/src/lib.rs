@@ -10,7 +10,7 @@ pub use riscv_rt::entry;
 
 mod alloc;
 pub mod block;
-pub mod storage;
+pub mod types;
 pub mod tx;
 
 pub mod log;

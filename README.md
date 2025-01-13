@@ -37,7 +37,7 @@ out-of-the-box.
 use core::default::Default;
 
 use contract_derive::contract;
-use eth_riscv_runtime::storage::Mapping;
+use eth_riscv_runtime::types::Mapping;
 
 use alloy_core::primitives::Address;
 
