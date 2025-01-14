@@ -2,7 +2,6 @@ use core::default::Default;
 use core::marker::PhantomData;
 
 use crate::*;
-
 use alloy_sol_types::{SolType, SolValue};
 
 extern crate alloc;
@@ -14,31 +13,46 @@ pub use mapping::Mapping;
 mod slot;
 pub use slot::Slot;
 
+// -------------------------------------------------------------------------------------------------
+//  STORAGE TYPES:
+//  > Must implement the following traits:
+//     - `StorageLayout`: Allows the `storage` macro to allocate a storage slot.
+//  > Must implement one of the following traits, for external consumption:
+//     - `DirectStorage`:  Exposes read and write capabilities of values that are directly accessed.
+//     - `KeyValueStorage`:  Exposes read and write capabilities of values that are accesed by key.
+//  > Unless it is a wrapping type (like `Mapping`) it must implement the following traits:
+//     - `StorageStorable`: Allows db storage reads and writes with abi de/encoding.
+// -------------------------------------------------------------------------------------------------
+
 /// A trait for storage types that require a dedicated slot in the storage layout
 // TODO: enhance `storage` macro to handle complex types (like tuples or custom structs)
 pub trait StorageLayout {
-    fn allocate(first: u64, second: u64, third: u64, fourth: u64) -> Self;
+    fn allocate(limb0: u64, limb1: u64, limb2: u64, limb3: u64) -> Self;
 }
 
-/// A trait for types that can be read from and written to storage slots
+/// Internal trait, for low-level storage operations.
 pub trait StorageStorable {
-    fn read(key: U256) -> Self;
-    fn write(&mut self, key: U256);
+    type Value: SolValue
+        + core::convert::From<<<Self::Value as SolValue>::SolType as SolType>::RustType>;
+
+    fn __read(key: U256) -> Self::Value;
+    fn __write(key: U256, value: Self::Value);
 }
 
-impl<V> StorageStorable for V
+/// Public interface for direct storage types (like `Slot`)
+pub trait DirectStorage<V>
 where
-    V: SolValue + core::convert::From<<<V as SolValue>::SolType as SolType>::RustType>,
+    Self: StorageStorable<Value = V>,
 {
-    fn read(slot: U256) -> Self {
-        let bytes: [u8; 32] = sload(slot).to_be_bytes();
-        Self::abi_decode(&bytes, false).unwrap_or_else(|_| revert())
-    }
+    fn read(&self) -> V;
+    fn write(&mut self, value: V);
+}
 
-    fn write(&mut self, slot: U256) {
-        let bytes = self.abi_encode();
-        let mut padded = [0u8; 32];
-        padded[..bytes.len()].copy_from_slice(&bytes);
-        sstore(slot, U256::from_be_bytes(padded));
-    }
+/// Public interface for key-value storage types (like `Mapping`)
+pub trait KeyValueStorage<K> {
+    type ReadValue;
+    type WriteValue;
+
+    fn read(&self, key: K) -> Self::ReadValue;
+    fn write(&mut self, key: K, value: Self::WriteValue);
 }

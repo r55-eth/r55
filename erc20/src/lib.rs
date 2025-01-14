@@ -4,7 +4,7 @@
 use core::default::Default;
 
 use contract_derive::{contract, payable, storage, Event};
-use eth_riscv_runtime::types::{Mapping, Slot, StorageLayout};
+use eth_riscv_runtime::types::*;
 
 use alloy_core::primitives::{address, Address, U256};
 
@@ -14,8 +14,8 @@ use alloc::string::String;
 #[storage]
 pub struct ERC20 {
     total_supply: Slot<U256>,
-    balances: Mapping<Address, U256>,
-    allowances: Mapping<Address, Mapping<Address, U256>>,
+    balances: Mapping<Address, Slot<U256>>,
+    allowances: Mapping<Address, Mapping<Address, Slot<U256>>>,
     // name: String,
     // symbol: String,
     // decimals: u8,
