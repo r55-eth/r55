@@ -37,11 +37,11 @@ where
     }
 }
 
-// Implementation for mappings that store direct storage values
+// Implementation for mappings that wrap `StorageStorable` types 
 impl<K, T, V> KeyValueStorage<K> for Mapping<K, T>
 where
     K: SolValue,
-    T: DirectStorage<V> + StorageStorable<Value = V>,
+    T: StorageStorable<Value = V>,
     V: SolValue + core::convert::From<<<V as SolValue>::SolType as SolType>::RustType>,
 {
     type ReadValue = V;
