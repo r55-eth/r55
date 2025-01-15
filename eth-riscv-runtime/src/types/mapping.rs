@@ -71,8 +71,8 @@ where
         }
     }
 
+    // Mappings that store other mappings cannot be written to directly
     fn write(&mut self, _key: K1, _value: Self::WriteValue) {
-        // Mappings that store other mappings cannot be written to directly
         revert();
     }
 }

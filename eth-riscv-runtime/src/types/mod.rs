@@ -13,19 +13,18 @@ pub use mapping::Mapping;
 mod slot;
 pub use slot::Slot;
 
-// -------------------------------------------------------------------------------------------------
-//  STORAGE TYPES:
-//  > Must implement the following traits:
-//     - `StorageLayout`: Allows the `storage` macro to allocate a storage slot.
-//  > Must implement one of the following traits, for external consumption:
-//     - `DirectStorage`:  Exposes read and write capabilities of values that are directly accessed.
-//     - `KeyValueStorage`:  Exposes read and write capabilities of values that are accesed by key.
-//  > Unless it is a wrapping type (like `Mapping`) it must implement the following traits:
-//     - `StorageStorable`: Allows db storage reads and writes with abi de/encoding.
-// -------------------------------------------------------------------------------------------------
+///  STORAGE TYPES:
+///  > Must implement the following traits:
+///     - `StorageLayout`: Allows the `storage` macro to allocate a storage slot.
+///  > Must implement one of the following traits, for external consumption:
+///     - `DirectStorage`:  Exposes read and write capabilities of values that are directly accessed.
+///     - `KeyValueStorage`:  Exposes read and write capabilities of values that are accesed by key.
+///  > Unless it is a wrapping type (like `Mapping`) it must implement the following traits:
+///     - `StorageStorable`: Allows db storage reads and writes with abi de/encoding.
 
-/// A trait for storage types that require a dedicated slot in the storage layout
+
 // TODO: enhance `storage` macro to handle complex types (like tuples or custom structs)
+/// A trait for storage types that require a dedicated slot in the storage layout
 pub trait StorageLayout {
     fn allocate(limb0: u64, limb1: u64, limb2: u64, limb3: u64) -> Self;
 }
