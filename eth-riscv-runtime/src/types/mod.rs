@@ -2,6 +2,7 @@ use core::default::Default;
 use core::marker::PhantomData;
 
 use crate::*;
+
 use alloy_sol_types::{SolType, SolValue};
 
 extern crate alloc;

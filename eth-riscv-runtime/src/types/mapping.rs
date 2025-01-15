@@ -71,7 +71,8 @@ where
         }
     }
 
-    // Mappings that store other mappings cannot be written to directly
+    // Mappings that store other mappings cannot be written to
+    // Only the lowest level mapping can store values on its `StorageStorable` wrapped type
     fn write(&mut self, _key: K1, _value: Self::WriteValue) {
         revert();
     }
