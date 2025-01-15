@@ -18,20 +18,43 @@ impl<V> StorageLayout for Slot<V> {
     }
 }
 
-impl<V: StorageStorable> Slot<V> {
-    pub fn read(&self) -> V {
-        V::read(self.id)
+impl<V> StorageStorable for Slot<V>
+where
+    V: SolValue + core::convert::From<<<V as SolValue>::SolType as SolType>::RustType>,
+{
+    type Value = V;
+
+    fn __read(key: U256) -> Self::Value {
+        let bytes: [u8; 32] = sload(key).to_be_bytes();
+        V::abi_decode(&bytes, false).unwrap_or_else(|_| revert())
     }
 
-    pub fn write(&mut self, mut value: V) {
-        value.write(self.id);
+    fn __write(key: U256, value: Self::Value) {
+        let bytes = value.abi_encode();
+        let mut padded = [0u8; 32];
+        padded[..bytes.len()].copy_from_slice(&bytes);
+        sstore(key, U256::from_be_bytes(padded));
+    }
+}
+
+impl<V> DirectStorage<V> for Slot<V>
+where
+    Self: StorageStorable<Value = V>,
+{
+    fn read(&self) -> V {
+        Self::__read(self.id)
+    }
+
+    fn write(&mut self, value: V) {
+        Self::__write(self.id, value)
     }
 }
 
 // Implementation of several std traits to improve dev-ex
 impl<V> Add<V> for Slot<V>
 where
-    V: StorageStorable + core::ops::Add<Output = V>,
+    Self: StorageStorable<Value = V>,
+    V: core::ops::Add<Output = V>,
 {
     type Output = V;
     fn add(self, rhs: V) -> V {
@@ -41,7 +64,8 @@ where
 
 impl<V> AddAssign<V> for Slot<V>
 where
-    V: StorageStorable + core::ops::Add<Output = V>,
+    Self: StorageStorable<Value = V>,
+    V: core::ops::Add<Output = V>,
 {
     fn add_assign(&mut self, rhs: V) {
         self.write(self.read() + rhs)
@@ -50,7 +74,8 @@ where
 
 impl<V> Sub<V> for Slot<V>
 where
-    V: StorageStorable + core::ops::Sub<Output = V>,
+    Self: StorageStorable<Value = V>,
+    V: core::ops::Sub<Output = V>,
 {
     type Output = V;
     fn sub(self, rhs: V) -> V {
@@ -60,7 +85,8 @@ where
 
 impl<V> SubAssign<V> for Slot<V>
 where
-    V: StorageStorable + core::ops::Sub<Output = V>,
+    Self: StorageStorable<Value = V>,
+    V: core::ops::Sub<Output = V>,
 {
     fn sub_assign(&mut self, rhs: V) {
         self.write(self.read() - rhs)
@@ -69,6 +95,7 @@ where
 
 impl<V> PartialEq for Slot<V>
 where
+    Self: StorageStorable<Value = V>,
     V: StorageStorable + PartialEq,
 {
     fn eq(&self, other: &Self) -> bool {
