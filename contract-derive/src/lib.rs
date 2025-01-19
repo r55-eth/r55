@@ -4,12 +4,11 @@ use alloy_sol_types::SolValue;
 use proc_macro::TokenStream;
 use quote::{format_ident, quote};
 use syn::{
-    parse_macro_input, Data, DeriveInput, Fields, ImplItem, ImplItemMethod, ItemImpl, ItemTrait,
-    ReturnType, TraitItem,
+    parse_macro_input, spanned::Spanned, Data, DeriveInput, Fields, ImplItem, ImplItemMethod, ItemImpl, ItemTrait, LitStr, Meta, NestedMeta, ReturnType, TraitItem
 };
 
 mod helpers;
-use crate::helpers::MethodInfo;
+use crate::helpers::{MethodInfo, InterfaceCompilationTarget, InterfaceArgs};
 
 #[proc_macro_derive(Event, attributes(indexed))]
 pub fn event_derive(input: TokenStream) -> TokenStream {
@@ -222,7 +221,7 @@ pub fn contract(_attr: TokenStream, item: TokenStream) -> TokenStream {
 
     // Generate the interface
     let interface_name = format_ident!("I{}", struct_name);
-    let interface = helpers::generate_interface(&public_methods, &interface_name);
+    let interface = helpers::generate_interface(&public_methods, &interface_name, None, InterfaceCompilationTarget::R55);
 
     // Generate initcode for deployments
     let deployment_code = helpers::generate_deployment_code(struct_name, constructor);
@@ -318,8 +317,9 @@ fn is_payable(method: &syn::ImplItemMethod) -> bool {
 }
 
 #[proc_macro_attribute]
-pub fn interface(_attr: TokenStream, item: TokenStream) -> TokenStream {
+pub fn interface(attr: TokenStream, item: TokenStream) -> TokenStream {
     let input = parse_macro_input!(item as ItemTrait);
+    let args = parse_macro_input!(attr as InterfaceArgs);
     let trait_name = &input.ident;
 
     let methods: Vec<_> = input
@@ -335,7 +335,7 @@ pub fn interface(_attr: TokenStream, item: TokenStream) -> TokenStream {
         .collect();
 
     // Generate intreface implementation
-    let interface = helpers::generate_interface(&methods, trait_name);
+    let interface = helpers::generate_interface(&methods, trait_name, args.rename, args.target);
 
     let output = quote! {
         #interface

@@ -9,7 +9,7 @@ exclude = [
     "contract-derive",
     "erc20",
     "erc20x",
-    "erc20x_standalone",
+    "evm-caller",
     "eth-riscv-runtime",
 ]
 

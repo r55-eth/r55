@@ -111,6 +111,7 @@ fn riscv_context(frame: &Frame) -> Option<RVEmu> {
 }
 
 pub fn handle_register<EXT, DB: Database>(handler: &mut EvmHandler<'_, EXT, DB>) {
+    trace!("HANDLE REGISTER");
     let call_stack = Rc::<RefCell<Vec<_>>>::new(RefCell::new(Vec::new()));
 
     // create a riscv context on call frame.
@@ -183,8 +184,8 @@ pub fn handle_register<EXT, DB: Database>(handler: &mut EvmHandler<'_, EXT, DB>)
                             // write return data to parent's memory
                             if res.output.len() == return_memory.len() {
                                 return_memory.copy_from_slice(&res.output);
-                            } else {
-                                warn!("Unexpected return data size!");
+                            } else if !res.output.is_empty() {
+                                warn!("Unexpected return data size!\n output len: {}\n return memory len: {}", res.output.len(), return_memory.len());
                             }
                         }
                     }

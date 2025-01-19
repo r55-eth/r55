@@ -1,9 +1,11 @@
+use alloy_core::hex::FromHex;
 use revm::Database;
 pub use revm::{
     primitives::{keccak256, ruint::Uint, AccountInfo, Address, Bytecode, Bytes, U256},
     InMemoryDB,
 };
-use std::sync::Once;
+use std::{sync::Once, fs, path::Path};
+
 
 static INIT: Once = Once::new();
 
@@ -52,3 +54,11 @@ pub fn read_db_slot(db: &mut InMemoryDB, contract: Address, slot: U256) -> U256 
     db.storage(contract, slot)
         .expect("Unable to read storge slot")
 }
+
+pub fn load_bytecode_from_file<P: AsRef<Path>>(path: P) -> Bytes {
+    let content = fs::read_to_string(path).expect("Unable to load bytecode from path");
+
+    let trimmed = content.trim().trim_start_matches("0x");
+    Bytes::from_hex(trimmed).expect("Unable to parse file content as bytes")
+}
+

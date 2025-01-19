@@ -1,5 +1,5 @@
 [package]
-name = "erc20x_standalone"
+name = "evm-caller"
 version = "0.1.0"
 edition = "2021"
 
