@@ -222,6 +222,7 @@ where
 
                 #calldata
 
+                // TODO: figure out a better way to get the return size 
                 // Create a dummy value to get its encoded size
                 let dummy_value = <#return_ty>::default();
                 let size = dummy_value.abi_encoded_size() as u64;
@@ -289,7 +290,7 @@ pub fn generate_selector_evm(method: &MethodInfo, style: Option<InterfaceNamingS
 }
 
 // Helper function to convert rust types to their solidity equivalent
-// TODO: make sure that the impl is st robust, so far only tested with "simple types"
+// TODO: make sure that the impl is robust, so far only tested with "simple types"
 fn rust_type_to_sol_type(ty: &Type) -> Result<DynSolType, &'static str> {
     match ty {
         Type::Path(type_path) => {
