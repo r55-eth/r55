@@ -57,7 +57,6 @@ pub fn read_db_slot(db: &mut InMemoryDB, contract: Address, slot: U256) -> U256 
 
 pub fn load_bytecode_from_file<P: AsRef<Path>>(path: P) -> Bytes {
     let content = fs::read_to_string(path).expect("Unable to load bytecode from path");
-
     let trimmed = content.trim().trim_start_matches("0x");
     Bytes::from_hex(trimmed).expect("Unable to parse file content as bytes")
 }
