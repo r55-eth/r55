@@ -222,15 +222,11 @@ where
 
                 #calldata
 
-                // TODO: figure out a better way to get the return size 
-                // Create a dummy value to get its encoded size
-                let dummy_value = <#return_ty>::default();
-                let size = dummy_value.abi_encoded_size() as u64;
                 let result = eth_riscv_runtime::call_contract(
                     self.address,
                     0_u64,
                     &complete_calldata,
-                    if size == 0 { 32_u64 } else { size }
+                    None
                 )?;
 
                 <#return_ty>::abi_decode(&result, true).ok()

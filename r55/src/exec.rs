@@ -86,10 +86,7 @@ pub fn run_tx(db: &mut InMemoryDB, addr: &Address, calldata: Vec<u8>) -> Result<
 }
 
 #[derive(Debug)]
-struct RVEmu {
-    emu: Emulator,
-    returned_data_destiny: Option<Range<u64>>,
-}
+struct RVEmu { emu: Emulator }
 
 fn riscv_context(frame: &Frame) -> Option<RVEmu> {
     let interpreter = frame.interpreter();
@@ -99,10 +96,7 @@ fn riscv_context(frame: &Frame) -> Option<RVEmu> {
     };
 
     match setup_from_elf(bytecode, &interpreter.contract.input) {
-        Ok(emu) => Some(RVEmu {
-            emu,
-            returned_data_destiny: None,
-        }),
+        Ok(emu) => Some( RVEmu { emu } ),
         Err(err) => {
             warn!("Failed to setup from ELF: {err}");
             None
@@ -155,45 +149,9 @@ pub fn handle_register<EXT, DB: Database>(handler: &mut EvmHandler<'_, EXT, DB>)
         };
 
         // if action is return, pop the stack.
-        if result.is_return() {
-            call_stack.borrow_mut().pop();
+        if result.is_return() { call_stack.borrow_mut().pop(); }
 
-            let is_last = call_stack.borrow().is_empty();
-            debug!(
-                "=== [FRAME-{}] Ouput: RETURN {}",
-                depth,
-                if is_last { "(last)" } else { "" }
-            );
-
-            if !is_last {
-                if let Some(Some(parent)) = call_stack.borrow_mut().last_mut() {
-                    if let Some(return_range) = &parent.returned_data_destiny {
-                        if let InterpreterAction::Return { result: res } = &mut result {
-                            // get allocated memory slice
-                            let return_memory = parent
-                                .emu
-                                .cpu
-                                .bus
-                                .get_dram_slice(return_range.clone())
-                                .expect("unable to get memory from return range");
-
-                            debug!("- Return data: {:?}", res.output);
-                            debug!("- Memory range: {:?}", return_range);
-                            debug!("- Memory size: {}", return_memory.len());
-
-                            // write return data to parent's memory
-                            if res.output.len() == return_memory.len() {
-                                return_memory.copy_from_slice(&res.output);
-                            } else if !res.output.is_empty() {
-                                warn!("Unexpected return data size!\n output len: {}\n return memory len: {}", res.output.len(), return_memory.len());
-                            }
-                        }
-                    }
-                }
-            }
-        }
         debug!("=== [Frame-{}] {:#?}", depth, frame.interpreter().gas);
-
         Ok(result)
     });
 }
@@ -204,25 +162,13 @@ fn execute_riscv(
     _shared_memory: &mut SharedMemory,
     host: &mut dyn Host,
 ) -> Result<InterpreterAction> {
-    debug!(
-        "{} RISC-V execution:  PC: {:#x}  Return data dst: {:#?}",
-        if rvemu.emu.cpu.pc == R5_REST_OF_RAM_INIT {
-            "Starting"
-        } else {
-            "Resuming"
-        },
+    trace!("{} RISC-V execution:  PC: {:#x}",
+        if rvemu.emu.cpu.pc == R5_REST_OF_RAM_INIT { "Starting" } else { "Resuming" },
         rvemu.emu.cpu.pc,
-        &rvemu.returned_data_destiny
     );
 
     let emu = &mut rvemu.emu;
     emu.cpu.is_count = true;
-
-    let returned_data_destiny = &mut rvemu.returned_data_destiny;
-    if let Some(destiny) = std::mem::take(returned_data_destiny) {
-        let data = emu.cpu.bus.get_dram_slice(destiny)?;
-        debug!("Loaded return data: {}", Bytes::copy_from_slice(data));
-    }
 
     let return_revert = |interpreter: &mut Interpreter, gas_used: u64| {
         let _ = interpreter.gas.record_cost(gas_used);
@@ -338,6 +284,29 @@ fn execute_riscv(
                             );
                         }
                     }
+                    Syscall::ReturnDataSize => {
+                        let size = interpreter.return_data_buffer.len();
+                        debug!("> RETURNDATASIZE: {}", size);
+                        emu.cpu.xregs.write(10, size as u64);
+                    }
+                    Syscall::ReturnDataCopy => {
+                        let dest_offset = emu.cpu.xregs.read(10);
+                        let offset = emu.cpu.xregs.read(11) as usize;
+                        let size = emu.cpu.xregs.read(12) as usize;
+                        let data = &interpreter.return_data_buffer.as_ref()[offset..size];
+                        trace!(
+                            "> RETURNDATACOPY [memory_offset: {}, offset: {}, size: {}]\n{}",
+                            dest_offset, offset, size,
+                            Bytes::from(data.to_vec())
+                        );
+
+                        // write return data to memory
+                        let return_memory = emu
+                            .cpu
+                            .bus
+                            .get_dram_slice(dest_offset..(dest_offset + size as u64))?;
+                        return_memory.copy_from_slice(data);
+                    }
                     Syscall::Call => {
                         let a0: u64 = emu.cpu.xregs.read(10);
                         let a1: u64 = emu.cpu.xregs.read(11);
@@ -355,23 +324,6 @@ fn execute_riscv(
                             .unwrap_or(&mut [])
                             .to_vec()
                             .into();
-
-                        // Store where return data should go
-                        let ret_offset = emu.cpu.xregs.read(16);
-                        let ret_size = emu.cpu.xregs.read(17);
-                        debug!(
-                            "> Return data will be written to: {}..{}",
-                            ret_offset,
-                            ret_offset + ret_size
-                        );
-
-                        // Initialize memory region for return data
-                        let return_memory = emu
-                            .cpu
-                            .bus
-                            .get_dram_slice(ret_offset..(ret_offset + ret_size))?;
-                        return_memory.fill(0);
-                        rvemu.returned_data_destiny = Some(ret_offset..(ret_offset + ret_size));
 
                         // Calculate gas cost of the call
                         // TODO: check correctness (tried using evm.codes as ref but i'm no gas wizard)
@@ -410,7 +362,7 @@ fn execute_riscv(
                                 scheme: CallScheme::Call,
                                 is_static: false,
                                 is_eof: false,
-                                return_memory_offset: 0..0, // handled with `returned_data_destiny`
+                                return_memory_offset: 0..0, // handled with RETURNDATACOPY
                             }),
                         });
                     }
@@ -441,7 +393,6 @@ fn execute_riscv(
                         let ret_size: u64 = emu.cpu.xregs.read(11);
                         let data_bytes = dram_slice(emu, ret_offset, ret_size)?;
 
-                        debug!("TO BE HASHED: {:?}", data_bytes);
                         let mut hasher = Keccak256::new();
                         hasher.update(data_bytes);
                         let hash: U256 = hasher.finalize().into();

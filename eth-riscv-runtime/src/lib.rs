@@ -17,14 +17,9 @@ pub mod log;
 pub use log::{emit_log, Event};
 
 pub mod call;
-pub use call::call_contract;
+pub use call::{call_contract, Contract, return_data_copy, return_data_size};
 
 const CALLDATA_ADDRESS: usize = 0x8000_0000;
-
-pub trait Contract {
-    fn call(&mut self);
-    fn call_with_data(&mut self, calldata: &[u8]);
-}
 
 pub unsafe fn slice_from_raw_parts(address: usize, length: usize) -> &'static [u8] {
     slice::from_raw_parts(address as *const u8, length)
@@ -79,32 +74,6 @@ pub fn sstore(key: U256, value: U256) {
             in("a0") key[0], in("a1") key[1], in("a2") key[2], in("a3") key[3],
             in("a4") value[0], in("a5") value[1], in("a6") value[2], in("a7") value[3],
             in("t0") u8::from(Syscall::SStore)
-        );
-    }
-}
-
-pub fn call(
-    addr: Address,
-    value: u64,
-    data_offset: u64,
-    data_size: u64,
-    res_offset: u64,
-    res_size: u64,
-) {
-    let addr: U256 = addr.into_word().into();
-    let addr = addr.as_limbs();
-    unsafe {
-        asm!(
-            "ecall",
-            in("a0") addr[0],
-            in("a1") addr[1],
-            in("a2") addr[2],
-            in("a3") value,
-            in("a4") data_offset,
-            in("a5") data_size,
-            in("a6") res_offset,
-            in("a7") res_size,
-            in("t0") u8::from(Syscall::Call)
         );
     }
 }

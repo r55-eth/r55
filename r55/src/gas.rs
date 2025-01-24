@@ -17,10 +17,10 @@ macro_rules! syscall_gas {
     ($interpreter:expr, $gas_cost:expr $(,)?) => {{
         let gas_cost = $gas_cost;
 
-        debug!("> About to record gas costs:");
-        debug!("  - Gas limit: {}", $interpreter.gas.limit());
-        debug!("  - Gas prev spent: {}", $interpreter.gas.spent());
-        debug!("  - Operation cost: {}", gas_cost);
+        trace!("> About to record gas costs:");
+        trace!("  - Gas limit: {}", $interpreter.gas.limit());
+        trace!("  - Gas prev spent: {}", $interpreter.gas.spent());
+        trace!("  - Operation cost: {}", gas_cost);
 
         if !$interpreter.gas.record_cost(gas_cost) {
             eprintln!("OUT OF GAS");
@@ -33,8 +33,8 @@ macro_rules! syscall_gas {
             });
         }
 
-        debug!("> Gas recorded successfully:");
-        debug!("  - Gas remaining: {}", $interpreter.gas.remaining());
-        debug!("  - Gas spent: {}", $interpreter.gas.spent());
+        trace!("> Gas recorded successfully:");
+        trace!("  - Gas remaining: {}", $interpreter.gas.remaining());
+        trace!("  - Gas spent: {}", $interpreter.gas.spent());
     }};
 }
