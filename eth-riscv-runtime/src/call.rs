@@ -6,21 +6,17 @@ use alloy_core::primitives::{Address, Bytes, U256};
 use eth_riscv_syscalls::Syscall;
 use core::arch::asm;
 
-/// Base trait for all call contexts
-pub trait CallCtx {}
-
 /// Trait for read-only contexts (static calls)
-pub trait StaticCallCtx: CallCtx {}
+pub trait StaticCallCtx {}
 
 /// Trait for state-modifying contexts
-pub trait MutableCallCtx: CallCtx {}
+pub trait MutableCallCtx: StaticCallCtx {}
 
 // Concrete types implementing the context traits
 pub struct StaticCtx;
 pub struct MutableCtx;
-impl CallCtx for StaticCtx {}
-impl CallCtx for MutableCtx {}
 impl StaticCallCtx for StaticCtx {}
+impl StaticCallCtx for MutableCtx {}
 impl MutableCallCtx for MutableCtx {}
 
 /// Trait for contracts to have an entry point for txs  

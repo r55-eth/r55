@@ -192,18 +192,16 @@ where
         .map(|method| generate_method_impl(method, interface_target, interface_style, false));
 
     quote! {
-        pub struct #interface_name<C: eth_riscv_runtime::CallCtx> {
+        pub struct #interface_name<C: eth_riscv_runtime::StaticCallCtx> {
             address: Address,
             _ctx: PhantomData<C>
         }
 
-        impl<C: eth_riscv_runtime::CallCtx> #interface_name<C> {
+        impl<C: eth_riscv_runtime::StaticCallCtx> #interface_name<C> {
             pub fn new(address: Address) -> Self {
                 Self { address, _ctx: PhantomData::default() }
             }
-        }
 
-        impl<C: eth_riscv_runtime::StaticCallCtx> #interface_name<C> {
             #(#immut_method_impls)*
         }
 

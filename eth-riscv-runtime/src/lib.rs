@@ -17,7 +17,7 @@ pub mod log;
 pub use log::{emit_log, Event};
 
 pub mod call;
-pub use call::{call_contract, staticcall_contract, Contract, return_data_copy, return_data_size, StaticCallCtx, MutableCallCtx, CallCtx, StaticCtx, MutableCtx};
+pub use call::{call_contract, staticcall_contract, Contract, return_data_copy, return_data_size, StaticCallCtx, MutableCallCtx, StaticCtx, MutableCtx};
 
 const CALLDATA_ADDRESS: usize = 0x8000_0000;
 
