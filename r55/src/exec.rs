@@ -307,65 +307,8 @@ fn execute_riscv(
                             .get_dram_slice(dest_offset..(dest_offset + size as u64))?;
                         return_memory.copy_from_slice(data);
                     }
-                    Syscall::Call => {
-                        let a0: u64 = emu.cpu.xregs.read(10);
-                        let a1: u64 = emu.cpu.xregs.read(11);
-                        let a2: u64 = emu.cpu.xregs.read(12);
-                        let addr = Address::from_word(U256::from_limbs([a0, a1, a2, 0]).into());
-                        let value: u64 = emu.cpu.xregs.read(13);
-
-                        // Get calldata
-                        let args_offset: u64 = emu.cpu.xregs.read(14);
-                        let args_size: u64 = emu.cpu.xregs.read(15);
-                        let calldata: Bytes = emu
-                            .cpu
-                            .bus
-                            .get_dram_slice(args_offset..(args_offset + args_size))
-                            .unwrap_or(&mut [])
-                            .to_vec()
-                            .into();
-
-                        // Calculate gas cost of the call
-                        // TODO: check correctness (tried using evm.codes as ref but i'm no gas wizard)
-                        // TODO: unsure whether memory expansion cost is missing (should be captured in the risc-v costs)
-                        let (empty_account_cost, addr_access_cost) = match host.load_account(addr) {
-                            Some(account) => {
-                                if account.is_cold {
-                                    (0, gas::CALL_NEW_ACCOUNT)
-                                } else {
-                                    (0, gas::CALL_BASE)
-                                }
-                            }
-                            None => (gas::CALL_EMPTY_ACCOUNT, gas::CALL_NEW_ACCOUNT),
-                        };
-                        let value_cost = if value != 0 { gas::CALL_VALUE } else { 0 };
-                        let call_gas_cost = empty_account_cost + addr_access_cost + value_cost;
-                        syscall_gas!(interpreter, call_gas_cost);
-
-                        // proactively spend gas limit as the remaining will be refunded (otherwise it underflows)
-                        let call_gas_limit = interpreter.gas.remaining();
-                        syscall_gas!(interpreter, call_gas_limit);
-
-                        debug!("> Call context:");
-                        debug!("  - Caller: {}", interpreter.contract.target_address);
-                        debug!("  - Target Address: {}", addr);
-                        debug!("  - Value: {}", value);
-                        debug!("  - Calldata: {:?}", calldata);
-                        return Ok(InterpreterAction::Call {
-                            inputs: Box::new(CallInputs {
-                                input: calldata,
-                                gas_limit: call_gas_limit,
-                                target_address: addr,
-                                bytecode_address: addr,
-                                caller: interpreter.contract.target_address,
-                                value: CallValue::Transfer(U256::from(value)),
-                                scheme: CallScheme::Call,
-                                is_static: false,
-                                is_eof: false,
-                                return_memory_offset: 0..0, // handled with RETURNDATACOPY
-                            }),
-                        });
-                    }
+                    Syscall::Call => return execute_call(emu, interpreter, host, false),
+                    Syscall::StaticCall => return execute_call(emu, interpreter, host, true),
                     Syscall::Revert => {
                         return Ok(InterpreterAction::Return {
                             result: InterpreterResult {
@@ -520,6 +463,71 @@ fn execute_riscv(
             }
         }
     }
+}
+
+fn execute_call(
+    emu: &mut Emulator,
+    interpreter: &mut Interpreter,
+    host: &mut dyn Host,
+    is_static: bool
+) -> Result<InterpreterAction> {
+    let a0: u64 = emu.cpu.xregs.read(10);
+    let a1: u64 = emu.cpu.xregs.read(11);
+    let a2: u64 = emu.cpu.xregs.read(12);
+    let addr = Address::from_word(U256::from_limbs([a0, a1, a2, 0]).into());
+    let value: u64 = emu.cpu.xregs.read(13);
+
+    // Get calldata
+    let args_offset: u64 = emu.cpu.xregs.read(14);
+    let args_size: u64 = emu.cpu.xregs.read(15);
+    let calldata: Bytes = emu
+        .cpu
+        .bus
+        .get_dram_slice(args_offset..(args_offset + args_size))
+        .unwrap_or(&mut [])
+        .to_vec()
+        .into();
+
+    // Calculate gas cost of the call
+    // TODO: check correctness (tried using evm.codes as ref but i'm no gas wizard)
+    // TODO: unsure whether memory expansion cost is missing (should be captured in the risc-v costs)
+    let (empty_account_cost, addr_access_cost) = match host.load_account(addr) {
+        Some(account) => {
+            if account.is_cold {
+                (0, gas::CALL_NEW_ACCOUNT)
+            } else {
+                (0, gas::CALL_BASE)
+            }
+        }
+        None => (gas::CALL_EMPTY_ACCOUNT, gas::CALL_NEW_ACCOUNT),
+    };
+    let value_cost = if value != 0 { gas::CALL_VALUE } else { 0 };
+    let call_gas_cost = empty_account_cost + addr_access_cost + value_cost;
+    syscall_gas!(interpreter, call_gas_cost);
+
+    // proactively spend gas limit as the remaining will be refunded (otherwise it underflows)
+    let call_gas_limit = interpreter.gas.remaining();
+    syscall_gas!(interpreter, call_gas_limit);
+
+    debug!("> {}Call context:", if is_static {"Static"} else {""} );
+    debug!("  - Caller: {}", interpreter.contract.target_address);
+    debug!("  - Target Address: {}", addr);
+    debug!("  - Value: {}", value);
+    debug!("  - Calldata: {:?}", calldata);
+    Ok(InterpreterAction::Call {
+        inputs: Box::new(CallInputs {
+            input: calldata,
+            gas_limit: call_gas_limit,
+            target_address: addr,
+            bytecode_address: addr,
+            caller: interpreter.contract.target_address,
+            value: CallValue::Transfer(U256::from(value)),
+            scheme: CallScheme::Call,
+            is_static,
+            is_eof: false,
+            return_memory_offset: 0..0, // handled with RETURNDATACOPY
+        }),
+    })
 }
 
 /// Returns RISC-V DRAM slice in a given size range, starts with a given offset

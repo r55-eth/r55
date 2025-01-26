@@ -143,12 +143,9 @@ pub fn contract(_attr: TokenStream, item: TokenStream) -> TokenStream {
         let return_handling = match &method.sig.output {
             ReturnType::Default => {
                 // No return value
-                quote! {
-                    self.#method_name(#( #arg_names ),*);
-                }
+                quote! { self.#method_name(#( #arg_names ),*); }
             }
             ReturnType::Type(_, return_type) => {
-                // Has return value
                 quote! {
                     let result: #return_type = self.#method_name(#( #arg_names ),*);
                     let result_bytes = result.abi_encode();
@@ -241,6 +238,7 @@ pub fn contract(_attr: TokenStream, item: TokenStream) -> TokenStream {
         // Public interface module
         #[cfg(not(feature = "deploy"))]
         pub mod interface {
+            use core::marker::PhantomData;
             use super::*;
             #interface
         }
@@ -335,7 +333,7 @@ pub fn interface(attr: TokenStream, item: TokenStream) -> TokenStream {
         .collect();
 
     // Generate intreface implementation
-    let interface = helpers::generate_interface(&methods, trait_name, args.rename, args.target);
+    let interface = helpers::generate_interface(&methods, trait_name, None, args.target);
 
     let output = quote! {
         #interface

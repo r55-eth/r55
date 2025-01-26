@@ -2,15 +2,15 @@ use std::error::Error;
 
 use alloy_core::primitives::keccak256;
 use alloy_dyn_abi::DynSolType;
-use alloy_sol_types::SolType;
+use proc_macro2::TokenStream;
 use quote::{format_ident, quote};
 use syn::{
     parse::{Parse, ParseStream},
-    spanned::Spanned,
     FnArg, Ident, ImplItemMethod, Meta, ReturnType, TraitItemMethod, Type,
 };
 
 // Unified method info from `ImplItemMethod` and `TraitItemMethod`
+#[derive(Clone)]
 pub struct MethodInfo<'a> {
     name: &'a Ident,
     args: Vec<syn::FnArg>,
@@ -33,6 +33,16 @@ impl<'a> From<&'a TraitItemMethod> for MethodInfo<'a> {
             name: &method.sig.ident,
             args: method.sig.inputs.iter().cloned().collect(),
             return_type: &method.sig.output,
+        }
+    }
+}
+
+impl<'a> MethodInfo<'a> {
+    pub fn is_mutable(&self) -> bool {
+        match self.args.first() {
+            Some(FnArg::Receiver(receiver)) => receiver.mutability.is_some(),
+            Some(FnArg::Typed(_)) => panic!("First argument must be self"),
+            None => panic!("Expected `self` as the first arg"),
         }
     }
 }
@@ -170,103 +180,144 @@ where
     for<'a> MethodInfo<'a>: From<&'a T>,
 {
     let methods: Vec<MethodInfo> = methods.iter().map(|&m| MethodInfo::from(m)).collect();
+    let (mut_methods, immut_methods): (Vec<MethodInfo>, Vec<MethodInfo>) =
+        methods.into_iter().partition(|m| m.is_mutable());
 
-    // Generate implementation
-    let method_impls = methods.iter().map(|method| {
-        let name = method.name;
-        let return_type = method.return_type;
-        let method_selector = match interface_target {
-            InterfaceCompilationTarget::R55 => u32::from_be_bytes(
-                generate_selector_r55(method, interface_style).expect("Unable to generate r55 fn selector"),
-            ),
-            InterfaceCompilationTarget::EVM => u32::from_be_bytes(
-                generate_selector_evm(method, interface_style).expect("Unable to generate evm fn selector"),
-            ),
-        };
-
-        let (arg_names, arg_types) = get_arg_props_skip_first(method);
-
-        let calldata = if arg_names.is_empty() {
-            quote! {
-                let mut complete_calldata = Vec::with_capacity(4);
-                complete_calldata.extend_from_slice(&[
-                    #method_selector.to_be_bytes()[0],
-                    #method_selector.to_be_bytes()[1],
-                    #method_selector.to_be_bytes()[2],
-                    #method_selector.to_be_bytes()[3],
-                ]);
-            }
-        } else {
-            quote! {
-                let mut args_calldata = (#(#arg_names),*).abi_encode();
-                let mut complete_calldata = Vec::with_capacity(4 + args_calldata.len());
-                complete_calldata.extend_from_slice(&[
-                    #method_selector.to_be_bytes()[0],
-                    #method_selector.to_be_bytes()[1],
-                    #method_selector.to_be_bytes()[2],
-                    #method_selector.to_be_bytes()[3],
-                ]);
-                complete_calldata.append(&mut args_calldata);
-            }
-        };
-
-        let return_ty = match return_type {
-            ReturnType::Default => quote! { () },
-            ReturnType::Type(_, ty) => quote! { #ty },
-        };
-
-        quote! {
-            pub fn #name(&self, #(#arg_names: #arg_types),*) -> Option<#return_ty> {
-                use alloy_sol_types::SolValue;
-                use alloc::vec::Vec;
-
-                #calldata
-
-                let result = eth_riscv_runtime::call_contract(
-                    self.address,
-                    0_u64,
-                    &complete_calldata,
-                    None
-                )?;
-
-                <#return_ty>::abi_decode(&result, true).ok()
-            }
-        }
-    });
+    // Generate implementations
+    let mut_method_impls = mut_methods
+        .iter()
+        .map(|method| generate_method_impl(method, interface_target, interface_style, true));
+    let immut_method_impls = immut_methods
+        .iter()
+        .map(|method| generate_method_impl(method, interface_target, interface_style, false));
 
     quote! {
-        pub struct #interface_name {
+        pub struct #interface_name<C: eth_riscv_runtime::CallCtx> {
             address: Address,
+            _ctx: PhantomData<C>
         }
 
-        impl #interface_name {
+        impl<C: eth_riscv_runtime::CallCtx> #interface_name<C> {
             pub fn new(address: Address) -> Self {
-                Self { address }
+                Self { address, _ctx: PhantomData::default() }
             }
+        }
 
-            #(#method_impls)*
+        impl<C: eth_riscv_runtime::StaticCallCtx> #interface_name<C> {
+            #(#immut_method_impls)*
+        }
+
+        impl<C: eth_riscv_runtime::MutableCallCtx> #interface_name<C> {
+            #(#mut_method_impls)*
+        }
+    }
+}
+
+fn generate_method_impl(
+    method: &MethodInfo,
+    interface_target: InterfaceCompilationTarget,
+    interface_style: Option<InterfaceNamingStyle>,
+    is_mutable: bool,
+) -> TokenStream {
+    let name = method.name;
+    let return_type = method.return_type;
+    let method_selector = match interface_target {
+        InterfaceCompilationTarget::R55 => u32::from_be_bytes(
+            generate_selector_r55(method, interface_style)
+                .expect("Unable to generate r55 fn selector"),
+        ),
+        InterfaceCompilationTarget::EVM => u32::from_be_bytes(
+            generate_selector_evm(method, interface_style)
+                .expect("Unable to generate evm fn selector"),
+        ),
+    };
+
+    let (arg_names, arg_types) = get_arg_props_skip_first(method);
+
+    let calldata = if arg_names.is_empty() {
+        quote! {
+            let mut complete_calldata = Vec::with_capacity(4);
+            complete_calldata.extend_from_slice(&[
+                #method_selector.to_be_bytes()[0],
+                #method_selector.to_be_bytes()[1],
+                #method_selector.to_be_bytes()[2],
+                #method_selector.to_be_bytes()[3],
+            ]);
+        }
+    } else {
+        quote! {
+            let mut args_calldata = (#(#arg_names),*).abi_encode();
+            let mut complete_calldata = Vec::with_capacity(4 + args_calldata.len());
+            complete_calldata.extend_from_slice(&[
+                #method_selector.to_be_bytes()[0],
+                #method_selector.to_be_bytes()[1],
+                #method_selector.to_be_bytes()[2],
+                #method_selector.to_be_bytes()[3],
+            ]);
+            complete_calldata.append(&mut args_calldata);
+        }
+    };
+
+    let (call_fn, self_param) = if is_mutable {
+        (
+            quote! { eth_riscv_runtime::call_contract },
+            quote! { &mut self },
+        )
+    } else {
+        (
+            quote! { eth_riscv_runtime::staticcall_contract },
+            quote! { &self},
+        )
+    };
+
+    let return_ty = match return_type {
+        ReturnType::Default => quote! { () },
+        ReturnType::Type(_, ty) => quote! { #ty },
+    };
+
+    quote! {
+        pub fn #name(#self_param, #(#arg_names: #arg_types),*) -> Option<#return_ty> {
+            use alloy_sol_types::SolValue;
+            use alloc::vec::Vec;
+
+            #calldata
+
+            let result = #call_fn(
+                self.address,
+                0_u64,
+                &complete_calldata,
+                None
+            )?;
+
+            <#return_ty>::abi_decode(&result, true).ok()
         }
     }
 }
 
 // Helper function to generate fn selector for r55 contracts
-pub fn generate_selector_r55(method: &MethodInfo, style: Option<InterfaceNamingStyle>) -> Option<[u8; 4]> {
+pub fn generate_selector_r55(
+    method: &MethodInfo,
+    style: Option<InterfaceNamingStyle>,
+) -> Option<[u8; 4]> {
     let name = match style {
         None => method.name.to_string(),
         Some(style) => match style {
             InterfaceNamingStyle::CamelCase => to_camel_case(method.name.to_string()),
-        }
+        },
     };
     keccak256(name)[..4].try_into().ok()
 }
 
 // Helper function to generate fn selector for evm contracts
-pub fn generate_selector_evm(method: &MethodInfo, style: Option<InterfaceNamingStyle>) -> Option<[u8; 4]> {
+pub fn generate_selector_evm(
+    method: &MethodInfo,
+    style: Option<InterfaceNamingStyle>,
+) -> Option<[u8; 4]> {
     let name = match style {
         None => method.name.to_string(),
         Some(style) => match style {
             InterfaceNamingStyle::CamelCase => to_camel_case(method.name.to_string()),
-        }
+        },
     };
 
     let (_, arg_types) = get_arg_props_skip_first(method);
@@ -390,7 +441,7 @@ fn rust_type_to_sol_type(ty: &Type) -> Result<DynSolType, &'static str> {
 fn to_camel_case(s: String) -> String {
     let mut result = String::new();
     let mut capitalize_next = false;
-    
+
     // Iterate through characters, skipping non-alphabetic separators
     for (i, c) in s.chars().enumerate() {
         if c.is_alphanumeric() {
@@ -407,7 +458,7 @@ fn to_camel_case(s: String) -> String {
             capitalize_next = true;
         }
     }
-    
+
     result
 }
 
