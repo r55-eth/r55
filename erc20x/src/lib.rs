@@ -23,9 +23,9 @@ impl ERC20x {
         }
     }
 
-    pub fn x_mint(&mut self, owner: Address, target: Address) -> bool {
+    pub fn x_mint(&mut self, owner: Address, value: U256, target: Address) -> bool {
         let mut token = IERC20::new(target).with_ctx(self);     // IERC20<ReadWrite>
-        match token.mint(owner, U256::from(1000000000000000000_u128)) {
+        match token.mint(owner, U256::from(value)) {
             Some(success) => success,
             _ => eth_riscv_runtime::revert()
         }
@@ -33,7 +33,7 @@ impl ERC20x {
 
     // pub fn x_mint_fails(&self, owner: Address, target: Address) -> bool {
     //     let mut token = IERC20::new(target).with_ctx(self);  // IERC20<ReadOnly>
-    //     match token.mint(owner, U256::from(1000000000000000000_u128)) {
+    //     match token.mint(owner, U256::from(value)) {
     //         Some(success) => success,
     //         _ => eth_riscv_runtime::revert()
     //     }

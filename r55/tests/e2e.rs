@@ -52,7 +52,7 @@ fn erc20() {
     info!("----------------------------------------------------------");
 
     let mut complete_calldata_x_mint = selector_x_mint.to_vec();
-    complete_calldata_x_mint.append(&mut (alice, erc20).abi_encode());
+    complete_calldata_x_mint.append(&mut (alice, U256::from(1e18), erc20).abi_encode());
 
     debug!(
         "Tx Calldata:\n> {:#?}",
