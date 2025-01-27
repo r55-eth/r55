@@ -5,19 +5,66 @@ use alloc::vec::Vec;
 use alloy_core::primitives::{Address, Bytes, U256};
 use eth_riscv_syscalls::Syscall;
 use core::arch::asm;
-
-/// Trait for read-only contexts (static calls)
-pub trait StaticCallCtx {}
-
-/// Trait for state-modifying contexts
-pub trait MutableCallCtx: StaticCallCtx {}
+use core::marker::PhantomData;
 
 // Concrete types implementing the context traits
-pub struct StaticCtx;
-pub struct MutableCtx;
-impl StaticCallCtx for StaticCtx {}
-impl StaticCallCtx for MutableCtx {}
-impl MutableCallCtx for MutableCtx {}
+pub struct ReadOnly;
+pub struct ReadWrite;
+
+// Marker traits to determine call context
+pub trait CallCtx {}
+pub trait StaticCtx: CallCtx {}
+pub trait MutableCtx: StaticCtx {}
+
+impl CallCtx for ReadOnly {}
+impl CallCtx for ReadWrite {}
+impl StaticCtx for ReadOnly {}
+impl StaticCtx for ReadWrite {}
+impl MutableCtx for ReadWrite {}
+
+// Marker trait to connect contract method context with call ctx
+pub trait MethodCtx { type Allowed: CallCtx; }
+impl<'a, T> MethodCtx for &'a T { type Allowed = ReadOnly; }
+impl<'a, T> MethodCtx for &'a mut T { type Allowed = ReadWrite; }
+
+// Types and traits to build a MethodCtx-aware interface
+pub struct InterfaceBuilder<I> {
+    pub address: Address,
+    pub _phantom: PhantomData<I>,
+}
+
+pub trait InitInterface: Sized {
+    fn new(address: Address) -> InterfaceBuilder<Self>;
+}
+
+// Key change: Add trait to convert between interface types
+pub trait IntoInterface<T> {
+    fn into_interface(self) -> T;
+}
+
+impl<I> InterfaceBuilder<I> {
+    pub fn with_ctx<M: MethodCtx, T>(
+        self,
+        _: M
+    ) -> T 
+    where
+        I: IntoInterface<T>,
+        M: MethodCtx<Allowed = T::Context>,
+        T: FromBuilder
+    {
+        let target_builder = InterfaceBuilder {
+            address: self.address,
+            _phantom: PhantomData,
+        };
+        T::from_builder(target_builder)
+    }
+}
+
+pub trait FromBuilder: Sized {
+    type Context: CallCtx;
+    fn from_builder(builder: InterfaceBuilder<Self>) -> Self;
+}
+
 
 /// Trait for contracts to have an entry point for txs  
 pub trait Contract {

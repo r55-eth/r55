@@ -2,7 +2,7 @@
 #![no_main]
 #![feature(alloc_error_handler, maybe_uninit_write_slice, round_char_boundary)]
 
-use alloy_core::primitives::{Address, Bytes, B256, U256};
+use alloy_core::primitives::{Address, U256};
 use core::arch::asm;
 use core::panic::PanicInfo;
 use core::slice;
@@ -17,7 +17,7 @@ pub mod log;
 pub use log::{emit_log, Event};
 
 pub mod call;
-pub use call::{call_contract, staticcall_contract, Contract, return_data_copy, return_data_size, StaticCallCtx, MutableCallCtx, StaticCtx, MutableCtx};
+pub use call::*;
 
 const CALLDATA_ADDRESS: usize = 0x8000_0000;
 

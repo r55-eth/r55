@@ -192,20 +192,46 @@ where
         .map(|method| generate_method_impl(method, interface_target, interface_style, false));
 
     quote! {
-        pub struct #interface_name<C: eth_riscv_runtime::StaticCallCtx> {
+        pub struct #interface_name<C: CallCtx> {
             address: Address,
             _ctx: PhantomData<C>
         }
 
-        impl<C: eth_riscv_runtime::StaticCallCtx> #interface_name<C> {
-            pub fn new(address: Address) -> Self {
-                Self { address, _ctx: PhantomData::default() }
+        impl InitInterface for #interface_name<ReadOnly> {
+            fn new(address: Address) -> InterfaceBuilder<Self> {
+                InterfaceBuilder {
+                    address,
+                    _phantom: PhantomData
+                }
             }
+        }
 
+        // Implement conversion between interface types
+        impl<C: CallCtx> IntoInterface<#interface_name<C>> for #interface_name<ReadOnly> {
+            fn into_interface(self) -> #interface_name<C> {
+                #interface_name {
+                    address: self.address,
+                    _ctx: PhantomData
+                }
+            }
+        }
+
+        impl<C: CallCtx> FromBuilder for #interface_name<C> {
+            type Context = C;
+
+            fn from_builder(builder: InterfaceBuilder<Self>) -> Self {
+                Self {
+                    address: builder.address,
+                    _ctx: PhantomData
+                }
+            }
+        }
+
+        impl<C: StaticCtx> #interface_name<C> {
             #(#immut_method_impls)*
         }
 
-        impl<C: eth_riscv_runtime::MutableCallCtx> #interface_name<C> {
+        impl<C: MutableCtx> #interface_name<C> {
             #(#mut_method_impls)*
         }
     }
