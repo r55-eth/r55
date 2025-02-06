@@ -1,5 +1,6 @@
 extern crate proc_macro;
-use alloy_core::primitives::keccak256;
+use alloy_core::primitives::{keccak256, U256};
+use alloy_sol_types::SolValue;
 use proc_macro::TokenStream;
 use quote::{format_ident, quote};
 use syn::{
@@ -265,11 +266,11 @@ pub fn contract(_attr: TokenStream, item: TokenStream) -> TokenStream {
 
             impl #struct_name { #(#input_methods)* }
             impl Contract for #struct_name {
-                fn call(&self) {
+                fn call(&mut self) {
                     self.call_with_data(&msg_data());
                 }
 
-                fn call_with_data(&self, calldata: &[u8]) {
+                fn call_with_data(&mut self, calldata: &[u8]) {
                     let selector = u32::from_be_bytes([calldata[0], calldata[1], calldata[2], calldata[3]]);
                     let calldata = &calldata[4..];
 
@@ -284,7 +285,7 @@ pub fn contract(_attr: TokenStream, item: TokenStream) -> TokenStream {
 
             #[eth_riscv_runtime::entry]
             fn main() -> ! {
-                let contract = #struct_name::default();
+                let mut contract = #struct_name::default();
                 contract.call();
                 eth_riscv_runtime::return_riscv(0, 0)
             }
@@ -349,4 +350,53 @@ pub fn interface(_attr: TokenStream, item: TokenStream) -> TokenStream {
     };
 
     TokenStream::from(output)
+}
+
+#[proc_macro_attribute]
+pub fn storage(_attr: TokenStream, input: TokenStream) -> TokenStream {
+    let input = parse_macro_input!(input as DeriveInput);
+    let name = &input.ident;
+    let vis = &input.vis;
+
+    let fields = match &input.data {
+        Data::Struct(data) => match &data.fields {
+            Fields::Named(fields) => &fields.named,
+            _ => {
+                let output = quote! {
+                    #vis struct #name;
+                    impl #name { pub fn new() -> Self { Self {} } }
+                };
+                return TokenStream::from(output);
+            }
+        },
+        _ => panic!("Storage derive only works on structs"),
+    };
+
+    // Generate the struct definition with the same fields
+    let struct_fields = fields.iter().map(|f| {
+        let name = &f.ident;
+        let ty = &f.ty;
+        quote! { pub #name: #ty }
+    });
+
+    // Generate initialization code for each field
+    // TODO: PoC uses a naive strategy. Enhance to support complex types like tuples or custom structs.
+    let init_fields = fields.iter().enumerate().map(|(i, f)| {
+        let name = &f.ident;
+        let slot = U256::from(i);
+        let [limb0, limb1, limb2, limb3] = slot.as_limbs();
+        quote! { #name: StorageLayout::allocate(#limb0, #limb1, #limb2, #limb3) }
+    });
+
+    let expanded = quote! {
+        #vis struct #name { #(#struct_fields,)* }
+
+        impl #name {
+            pub fn default() -> Self {
+                Self { #(#init_fields,)* }
+            }
+        }
+    };
+
+    TokenStream::from(expanded)
 }

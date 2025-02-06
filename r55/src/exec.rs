@@ -62,8 +62,8 @@ pub fn deploy_contract(
             ..
         } => {
             info!(
-                "NEW DEPLOYMENT:\n> contract address: {:?}\n> logs: {:#?}\n",
-                addr, logs
+                "NEW DEPLOYMENT:\n> contract address: {:?}{}",
+                addr, if logs.is_empty() {""} else {"\n> logs: {:#?}\n"}
             );
             Ok(addr)
         }
@@ -312,12 +312,16 @@ fn execute_riscv(
                         });
                     }
                     Syscall::SLoad => {
-                        let key: u64 = emu.cpu.xregs.read(10);
+                        let key1: u64 = emu.cpu.xregs.read(10);
+                        let key2: u64 = emu.cpu.xregs.read(11);
+                        let key3: u64 = emu.cpu.xregs.read(12);
+                        let key4: u64 = emu.cpu.xregs.read(13);
+                        let key = U256::from_limbs([key1, key2, key3, key4]);
                         debug!(
                             "> SLOAD ({}) - Key: {:#02x}",
                             interpreter.contract.target_address, key
                         );
-                        match host.sload(interpreter.contract.target_address, U256::from(key)) {
+                        match host.sload(interpreter.contract.target_address, key) {
                             Some((value, is_cold)) => {
                                 debug!(
                                     "> SLOAD ({}) - Value: {}",
@@ -343,22 +347,27 @@ fn execute_riscv(
                         }
                     }
                     Syscall::SStore => {
-                        let key: u64 = emu.cpu.xregs.read(10);
-                        let first: u64 = emu.cpu.xregs.read(11);
-                        let second: u64 = emu.cpu.xregs.read(12);
-                        let third: u64 = emu.cpu.xregs.read(13);
-                        let fourth: u64 = emu.cpu.xregs.read(14);
+                        let key1: u64 = emu.cpu.xregs.read(10);
+                        let key2: u64 = emu.cpu.xregs.read(11);
+                        let key3: u64 = emu.cpu.xregs.read(12);
+                        let key4: u64 = emu.cpu.xregs.read(13);
+                        let key = U256::from_limbs([key1, key2, key3, key4]);
                         debug!(
-                            "> SSTORE ({}) - Key: {:#02x}, Value: {}",
-                            interpreter.contract.target_address,
-                            key,
-                            U256::from_limbs([first, second, third, fourth])
+                            "> SSTORE ({}) - Key: {}",
+                            interpreter.contract.target_address, key
                         );
-                        let result = host.sstore(
-                            interpreter.contract.target_address,
-                            U256::from(key),
-                            U256::from_limbs([first, second, third, fourth]),
+
+                        let val1: u64 = emu.cpu.xregs.read(14);
+                        let val2: u64 = emu.cpu.xregs.read(15);
+                        let val3: u64 = emu.cpu.xregs.read(16);
+                        let val4: u64 = emu.cpu.xregs.read(17);
+                        let value = U256::from_limbs([val1, val2, val3, val4]);
+                        debug!(
+                            "> SSTORE ({}) - Value: {}",
+                            interpreter.contract.target_address, value
                         );
+
+                        let result = host.sstore(interpreter.contract.target_address, key, value);
                         if let Some(result) = result {
                             syscall_gas!(
                                 interpreter,
@@ -450,7 +459,7 @@ fn execute_riscv(
                         return Ok(InterpreterAction::Return {
                             result: InterpreterResult {
                                 result: InstructionResult::Revert,
-                                output: Bytes::from(0u32.to_le_bytes()), //TODO: return revert(0,0)
+                                output: Bytes::from(0u32.to_be_bytes()), //TODO: return revert(0,0)
                                 gas: interpreter.gas, // FIXME: gas is not correct
                             },
                         });
@@ -473,23 +482,17 @@ fn execute_riscv(
                         let ret_size: u64 = emu.cpu.xregs.read(11);
                         let data_bytes = dram_slice(emu, ret_offset, ret_size)?;
 
+                        debug!("TO BE HASHED: {:?}", data_bytes);
                         let mut hasher = Keccak256::new();
                         hasher.update(data_bytes);
-                        let hash: [u8; 32] = hasher.finalize().into();
+                        let hash: U256 = hasher.finalize().into();
+                        debug!("KECCAK256: {:?}", hash);
 
-                        // Write the hash to the emulator's registers
-                        emu.cpu
-                            .xregs
-                            .write(10, u64::from_le_bytes(hash[0..8].try_into()?));
-                        emu.cpu
-                            .xregs
-                            .write(11, u64::from_le_bytes(hash[8..16].try_into()?));
-                        emu.cpu
-                            .xregs
-                            .write(12, u64::from_le_bytes(hash[16..24].try_into()?));
-                        emu.cpu
-                            .xregs
-                            .write(13, u64::from_le_bytes(hash[24..32].try_into()?));
+                        let limbs = hash.as_limbs();
+                        emu.cpu.xregs.write(10, limbs[0]);
+                        emu.cpu.xregs.write(11, limbs[1]);
+                        emu.cpu.xregs.write(12, limbs[2]);
+                        emu.cpu.xregs.write(13, limbs[3]);
                     }
                     Syscall::CallValue => {
                         let value = interpreter.contract.call_value;
