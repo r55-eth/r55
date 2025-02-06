@@ -63,7 +63,12 @@ pub fn deploy_contract(
         } => {
             info!(
                 "NEW DEPLOYMENT:\n> contract address: {:?}{}",
-                addr, if logs.is_empty() {""} else {"\n> logs: {:#?}\n"}
+                addr,
+                if logs.is_empty() {
+                    ""
+                } else {
+                    "\n> logs: {:#?}\n"
+                }
             );
             Ok(addr)
         }

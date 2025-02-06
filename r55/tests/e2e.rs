@@ -1,4 +1,4 @@
-use alloy_primitives::{Bytes, U256, address, Address};
+use alloy_primitives::{address, Address, Bytes, U256};
 use alloy_sol_types::SolValue;
 use r55::{
     compile_deploy, compile_with_prefix,

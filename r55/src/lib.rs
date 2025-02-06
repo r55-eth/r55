@@ -157,7 +157,11 @@ mod tests {
             .expect("Error executing tx")
             .output;
 
-        assert_eq!(B256::from_slice(owner_result.as_slice()), alice.into_word(), "Incorrect owner");
+        assert_eq!(
+            B256::from_slice(owner_result.as_slice()),
+            alice.into_word(),
+            "Incorrect owner"
+        );
 
         // Mint 42 tokens to Alice
         let value_mint = U256::from(42e18);
@@ -183,13 +187,9 @@ mod tests {
         let mut calldata_alice_balance = alice.abi_encode();
         let mut complete_calldata_alice_balance = selector_balance.to_vec();
         complete_calldata_alice_balance.append(&mut calldata_alice_balance);
-        let alice_balance_result = run_tx(
-            &mut db,
-            &erc20,
-            complete_calldata_alice_balance.clone(),
-        )
-        .expect("Error executing tx")
-        .output;
+        let alice_balance_result = run_tx(&mut db, &erc20, complete_calldata_alice_balance.clone())
+            .expect("Error executing tx")
+            .output;
 
         assert_eq!(
             U256::from_be_bytes::<32>(alice_balance_result.as_slice().try_into().unwrap()),
@@ -202,18 +202,13 @@ mod tests {
         let mut calldata_transfer = (bob, value_transfer).abi_encode();
         let mut complete_calldata_transfer = selector_transfer.to_vec();
         complete_calldata_transfer.append(&mut calldata_transfer);
-        let transfer_result =
-            run_tx(&mut db, &erc20, complete_calldata_transfer.clone()).unwrap();
+        let transfer_result = run_tx(&mut db, &erc20, complete_calldata_transfer.clone()).unwrap();
         assert!(transfer_result.status, "Transfer transaction failed");
 
         // Check Alice's balance
-        let alice_balance_result = run_tx(
-            &mut db,
-            &erc20,
-            complete_calldata_alice_balance.clone(),
-        )
-        .expect("Error executing tx")
-        .output;
+        let alice_balance_result = run_tx(&mut db, &erc20, complete_calldata_alice_balance.clone())
+            .expect("Error executing tx")
+            .output;
 
         assert_eq!(
             U256::from_be_bytes::<32>(alice_balance_result.as_slice().try_into().unwrap()),
@@ -225,13 +220,9 @@ mod tests {
         let mut calldata_bob_balance = bob.abi_encode();
         let mut complete_calldata_bob_balance = selector_balance.to_vec();
         complete_calldata_bob_balance.append(&mut calldata_bob_balance);
-        let bob_balance_result = run_tx(
-            &mut db,
-            &erc20,
-            complete_calldata_bob_balance.clone(),
-        )
-        .expect("Error executing tx")
-        .output;
+        let bob_balance_result = run_tx(&mut db, &erc20, complete_calldata_bob_balance.clone())
+            .expect("Error executing tx")
+            .output;
 
         assert_eq!(
             U256::from_be_bytes::<32>(bob_balance_result.as_slice().try_into().unwrap()),
@@ -244,18 +235,16 @@ mod tests {
         let mut calldata_approve = (carol, value_approve).abi_encode();
         let mut complete_calldata_approve = selector_approve.to_vec();
         complete_calldata_approve.append(&mut calldata_approve);
-        let approve_result =
-            run_tx(&mut db, &erc20, complete_calldata_approve.clone()).unwrap();
+        let approve_result = run_tx(&mut db, &erc20, complete_calldata_approve.clone()).unwrap();
         assert!(approve_result.status, "Approve transaction failed");
 
         // Check Carol's allowance
         let mut calldata_allowance = (alice, carol).abi_encode();
         let mut complete_calldata_allowance = selector_allowance.to_vec();
         complete_calldata_allowance.append(&mut calldata_allowance);
-        let carol_allowance_result =
-            run_tx(&mut db, &erc20, complete_calldata_allowance.clone())
-                .expect("Error executing tx")
-                .output;
+        let carol_allowance_result = run_tx(&mut db, &erc20, complete_calldata_allowance.clone())
+            .expect("Error executing tx")
+            .output;
 
         assert_eq!(
             U256::from_be_bytes::<32>(carol_allowance_result.as_slice().try_into().unwrap()),
@@ -404,26 +393,17 @@ mod tests {
         let balances_id = U256::from(1);
         // Assert `balances[alice]` is set to track the correct slot
         let expected_slot = get_mapping_slot(alice.abi_encode(), balances_id);
-        assert_eq!(
-            mint_alice,
-            read_db_slot(&mut db, erc20, expected_slot)
-        );
+        assert_eq!(mint_alice, read_db_slot(&mut db, erc20, expected_slot));
 
         // Assert `balances[bob]` is set to track the correct slot
         let expected_slot = get_mapping_slot(bob.abi_encode(), balances_id);
-        assert_eq!(
-            mint_bob,
-            read_db_slot(&mut db, erc20, expected_slot)
-        );
+        assert_eq!(mint_bob, read_db_slot(&mut db, erc20, expected_slot));
 
         let allowances_id = U256::from(2);
         // Assert `allowance[alice][carol]` is set to track the correct slot
         let id = get_mapping_slot(alice.abi_encode(), allowances_id);
         let expected_slot = get_mapping_slot(carol.abi_encode(), id);
-        assert_eq!(
-            allowance_carol,
-            read_db_slot(&mut db, erc20, expected_slot)
-        );
+        assert_eq!(allowance_carol, read_db_slot(&mut db, erc20, expected_slot));
 
         // Assert `owner` is set to track the correct slot
         let expected_slot = U256::from(3);
@@ -431,6 +411,5 @@ mod tests {
             read_db_slot(&mut db, erc20, expected_slot),
             alice.into_word().into(),
         );
-
     }
 }
