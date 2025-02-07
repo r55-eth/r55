@@ -1,5 +1,5 @@
 use alloy_core::primitives::{Keccak256, U32};
-use core::{cell::RefCell, ops::Range};
+use core::cell::RefCell;
 use eth_riscv_interpreter::setup_from_elf;
 use eth_riscv_syscalls::Syscall;
 use revm::{
@@ -26,7 +26,7 @@ pub fn deploy_contract(
     bytecode: Bytes,
     encoded_args: Option<Vec<u8>>,
 ) -> Result<Address> {
-    let init_code = if Some(&0xff) == bytecode.first() { 
+    let init_code = if Some(&0xff) == bytecode.first() {
         // Craft R55 initcode: [0xFF][codesize][bytecode][constructor_args]
         let codesize = U32::from(bytecode.len());
         debug!("CODESIZE: {}", codesize);
@@ -120,7 +120,9 @@ pub fn run_tx(db: &mut InMemoryDB, addr: &Address, calldata: Vec<u8>) -> Result<
 }
 
 #[derive(Debug)]
-struct RVEmu { emu: Emulator }
+struct RVEmu {
+    emu: Emulator,
+}
 
 fn riscv_context(frame: &Frame) -> Option<RVEmu> {
     let interpreter = frame.interpreter();
@@ -147,7 +149,7 @@ fn riscv_context(frame: &Frame) -> Option<RVEmu> {
     };
 
     match setup_from_elf(code, calldata) {
-        Ok(emu) => Some( RVEmu { emu } ),
+        Ok(emu) => Some(RVEmu { emu }),
         Err(err) => {
             warn!("Failed to setup from ELF: {err}");
             None
@@ -189,7 +191,7 @@ pub fn handle_register<EXT, DB: Database>(handler: &mut EvmHandler<'_, EXT, DB>)
         let depth = call_stack.borrow().len() - 1;
 
         // use last frame as stack is LIFO
-        let mut result = if let Some(Some(riscv_context)) = call_stack.borrow_mut().last_mut() {
+        let result = if let Some(Some(riscv_context)) = call_stack.borrow_mut().last_mut() {
             debug!(
                 "=== [FRAME-{}] Contract: {} ============-",
                 depth,
@@ -202,7 +204,9 @@ pub fn handle_register<EXT, DB: Database>(handler: &mut EvmHandler<'_, EXT, DB>)
         };
 
         // if action is return, pop the stack.
-        if result.is_return() { call_stack.borrow_mut().pop(); }
+        if result.is_return() {
+            call_stack.borrow_mut().pop();
+        }
 
         debug!("=== [Frame-{}] {:#?}", depth, frame.interpreter().gas);
         Ok(result)
@@ -215,8 +219,13 @@ fn execute_riscv(
     _shared_memory: &mut SharedMemory,
     host: &mut dyn Host,
 ) -> Result<InterpreterAction> {
-    trace!("{} RISC-V execution:  PC: {:#x}",
-        if rvemu.emu.cpu.pc == R5_REST_OF_RAM_INIT { "Starting" } else { "Resuming" },
+    trace!(
+        "{} RISC-V execution:  PC: {:#x}",
+        if rvemu.emu.cpu.pc == R5_REST_OF_RAM_INIT {
+            "Starting"
+        } else {
+            "Resuming"
+        },
         rvemu.emu.cpu.pc,
     );
 
@@ -349,7 +358,9 @@ fn execute_riscv(
                         let data = &interpreter.return_data_buffer.as_ref()[offset..size];
                         trace!(
                             "> RETURNDATACOPY [memory_offset: {}, offset: {}, size: {}]\n{}",
-                            dest_offset, offset, size,
+                            dest_offset,
+                            offset,
+                            size,
                             Bytes::from(data.to_vec())
                         );
 

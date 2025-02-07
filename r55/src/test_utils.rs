@@ -4,8 +4,7 @@ pub use revm::{
     primitives::{keccak256, ruint::Uint, AccountInfo, Address, Bytecode, Bytes, U256},
     InMemoryDB,
 };
-use std::{sync::Once, fs, path::Path};
-
+use std::{fs, path::Path, sync::Once};
 
 static INIT: Once = Once::new();
 
@@ -60,4 +59,3 @@ pub fn load_bytecode_from_file<P: AsRef<Path>>(path: P) -> Bytes {
     let trimmed = content.trim().trim_start_matches("0x");
     Bytes::from_hex(trimmed).expect("Unable to parse file content as bytes")
 }
-

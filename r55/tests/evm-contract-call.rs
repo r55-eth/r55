@@ -7,7 +7,10 @@ use r55::{
         add_balance_to_db, get_selector_from_sig, initialize_logger, load_bytecode_from_file,
     },
 };
-use revm::{ primitives::{address, Address}, InMemoryDB };
+use revm::{
+    primitives::{address, Address},
+    InMemoryDB,
+};
 use tracing::{debug, error, info};
 
 const EVM_PATH: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/tests/simple.txt");
@@ -50,7 +53,6 @@ fn evm_call() {
     let selector_x_get = get_selector_from_sig("x_get");
     let selector_x_set = get_selector_from_sig("x_set");
     let selector_x_raw_call = get_selector_from_sig("x_raw_call");
-
 
     let alice: Address = address!("000000000000000000000000000000000000000A");
     add_balance_to_db(&mut db, alice, 1e18 as u64);
