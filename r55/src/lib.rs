@@ -115,7 +115,7 @@ where
 #[cfg(test)]
 mod tests {
     use crate::exec::{deploy_contract, run_tx};
-    use crate::{compile_deploy, compile_runtime, compile_with_prefix, test_utils::*};
+    use crate::{compile_deploy, compile_with_prefix, test_utils::*};
 
     use alloy_core::hex::{self, ToHexExt};
     use alloy_core::primitives::address;
