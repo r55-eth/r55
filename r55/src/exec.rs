@@ -327,19 +327,19 @@ fn execute_riscv(
                             interpreter.contract.target_address, key
                         );
                         match host.sload(interpreter.contract.target_address, key) {
-                            Some((value, is_cold)) => {
+                            Some(state_load) => {
                                 debug!(
                                     "> SLOAD ({}) - Value: {}",
-                                    interpreter.contract.target_address, value
+                                    interpreter.contract.target_address, state_load.data
                                 );
-                                let limbs = value.as_limbs();
+                                let limbs = state_load.data.as_limbs();
                                 emu.cpu.xregs.write(10, limbs[0]);
                                 emu.cpu.xregs.write(11, limbs[1]);
                                 emu.cpu.xregs.write(12, limbs[2]);
                                 emu.cpu.xregs.write(13, limbs[3]);
                                 syscall_gas!(
                                     interpreter,
-                                    if is_cold {
+                                    if state_load.is_cold {
                                         gas::SLOAD_COLD
                                     } else {
                                         gas::SLOAD_WARM
@@ -422,7 +422,7 @@ fn execute_riscv(
                         // Calculate gas cost of the call
                         // TODO: check correctness (tried using evm.codes as ref but i'm no gas wizard)
                         // TODO: unsure whether memory expansion cost is missing (should be captured in the risc-v costs)
-                        let (empty_account_cost, addr_access_cost) = match host.load_account(addr) {
+                        let (empty_account_cost, addr_access_cost) = match host.load_account_delegated(addr) {
                             Some(account) => {
                                 if account.is_cold {
                                     (0, gas::CALL_NEW_ACCOUNT)

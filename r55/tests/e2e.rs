@@ -8,8 +8,8 @@ use r55::{
 use revm::InMemoryDB;
 use tracing::{debug, error, info};
 
-const ERC20_PATH: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/../erc20");
-const ERC20X_PATH: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/../erc20x");
+const ERC20_PATH: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/../examples/erc20");
+const ERC20X_PATH: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/../examples/erc20x");
 
 #[test]
 fn erc20() {
