@@ -422,16 +422,17 @@ fn execute_riscv(
                         // Calculate gas cost of the call
                         // TODO: check correctness (tried using evm.codes as ref but i'm no gas wizard)
                         // TODO: unsure whether memory expansion cost is missing (should be captured in the risc-v costs)
-                        let (empty_account_cost, addr_access_cost) = match host.load_account_delegated(addr) {
-                            Some(account) => {
-                                if account.is_cold {
-                                    (0, gas::CALL_NEW_ACCOUNT)
-                                } else {
-                                    (0, gas::CALL_BASE)
+                        let (empty_account_cost, addr_access_cost) =
+                            match host.load_account_delegated(addr) {
+                                Some(account) => {
+                                    if account.is_cold {
+                                        (0, gas::CALL_NEW_ACCOUNT)
+                                    } else {
+                                        (0, gas::CALL_BASE)
+                                    }
                                 }
-                            }
-                            None => (gas::CALL_EMPTY_ACCOUNT, gas::CALL_NEW_ACCOUNT),
-                        };
+                                None => (gas::CALL_EMPTY_ACCOUNT, gas::CALL_NEW_ACCOUNT),
+                            };
                         let value_cost = if value != 0 { gas::CALL_VALUE } else { 0 };
                         let call_gas_cost = empty_account_cost + addr_access_cost + value_cost;
                         syscall_gas!(interpreter, call_gas_cost);

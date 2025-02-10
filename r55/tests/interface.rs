@@ -4,7 +4,8 @@ use r55::{
 use revm::InMemoryDB;
 use tracing::{error, info};
 
-const ERC20X_ALONE_PATH: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/../examples/erc20x_standalone");
+const ERC20X_ALONE_PATH: &str =
+    concat!(env!("CARGO_MANIFEST_DIR"), "/../examples/erc20x_standalone");
 
 #[test]
 fn deploy_erc20x_without_contract_dependencies() {
