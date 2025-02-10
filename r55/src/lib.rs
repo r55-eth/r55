@@ -14,7 +14,7 @@ use tracing::{error, info};
 fn compile_runtime(path: &str) -> eyre::Result<Vec<u8>> {
     info!("Compiling runtime: {}", path);
     let status = Command::new("cargo")
-        .arg("+nightly-2024-02-01")
+        .arg("+nightly-2025-01-07")
         .arg("build")
         .arg("-r")
         .arg("--lib")
@@ -59,7 +59,7 @@ pub fn compile_deploy(path: &str) -> eyre::Result<Vec<u8>> {
     compile_runtime(path)?;
     info!("Compiling deploy: {}", path);
     let status = Command::new("cargo")
-        .arg("+nightly-2024-02-01")
+        .arg("+nightly-2025-01-07")
         .arg("build")
         .arg("-r")
         .arg("--lib")
@@ -115,14 +115,14 @@ where
 #[cfg(test)]
 mod tests {
     use crate::exec::{deploy_contract, run_tx};
-    use crate::{compile_deploy, compile_runtime, compile_with_prefix, test_utils::*};
+    use crate::{compile_deploy, compile_with_prefix, test_utils::*};
 
     use alloy_core::hex::{self, ToHexExt};
     use alloy_core::primitives::address;
     use alloy_primitives::B256;
     use alloy_sol_types::SolValue;
 
-    const ERC20_PATH: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/../erc20");
+    const ERC20_PATH: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/../examples/erc20");
 
     #[test]
     fn test_runtime() {

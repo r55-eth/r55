@@ -7,9 +7,7 @@ default-members = ["eth-riscv-interpreter", "eth-riscv-syscalls", "r55"]
 
 exclude = [
     "contract-derive",
-    "erc20",
-    "erc20x",
-    "evm-caller",
+    "examples/*",
     "eth-riscv-runtime",
 ]
 

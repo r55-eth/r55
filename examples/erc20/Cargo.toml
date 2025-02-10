@@ -3,17 +3,19 @@ name = "erc20"
 version = "0.1.0"
 edition = "2021"
 
+[workspace]
+
 [features]
 default = []
 deploy = []
 interface-only = []
 
 [dependencies]
-contract-derive = { path = "../contract-derive" }
-eth-riscv-runtime = { path = "../eth-riscv-runtime" }
+contract-derive = { path = "../../contract-derive" }
+eth-riscv-runtime = { path = "../../eth-riscv-runtime" }
 
-alloy-core = { version = "0.7.4", default-features = false }
-alloy-sol-types = { version = "0.7.4", default-features = false }
+alloy-core = { version = "0.8.20", default-features = false }
+alloy-sol-types = { version = "0.8.20", default-features = false }
 
 [[bin]]
 name = "runtime"
