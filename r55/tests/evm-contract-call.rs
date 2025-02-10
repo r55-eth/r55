@@ -13,8 +13,8 @@ use revm::{
 };
 use tracing::{debug, error, info};
 
-const EVM_PATH: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/tests/simple.txt");
-const RISCV_PATH: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/../evm-caller");
+const EVM_PATH: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/tests/simple-evm-contract.txt");
+const RISCV_PATH: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/../examples/evm-caller");
 
 // ------------------------------------------------------------------------------------------------
 //    SIMPLE EVM CONTRACT
@@ -52,7 +52,6 @@ fn evm_call() {
     let selector_raw_call = get_selector_from_sig("rawCall((address,bytes))");
     let selector_x_get = get_selector_from_sig("x_get");
     let selector_x_set = get_selector_from_sig("x_set");
-    let selector_x_raw_call = get_selector_from_sig("x_raw_call");
 
     let alice: Address = address!("000000000000000000000000000000000000000A");
     add_balance_to_db(&mut db, alice, 1e18 as u64);
