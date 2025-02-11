@@ -432,10 +432,15 @@ fn execute_riscv(
                         });
                     }
                     Syscall::Revert => {
+                        let ret_offset: u64 = emu.cpu.xregs.read(10);
+                        let ret_size: u64 = emu.cpu.xregs.read(11);
+                        let data_bytes: Vec<u8> = dram_slice(emu, ret_offset, ret_size)?.into();
+                        debug!("REVERT > offset: {:#04x}, size: {}", ret_offset, ret_size);
+
                         return Ok(InterpreterAction::Return {
                             result: InterpreterResult {
                                 result: InstructionResult::Revert,
-                                output: Bytes::from(0u32.to_be_bytes()), //TODO: return revert(0,0)
+                                output: Bytes::from(data_bytes), //TODO: return revert(0,0)
                                 gas: interpreter.gas, // FIXME: gas is not correct
                             },
                         });

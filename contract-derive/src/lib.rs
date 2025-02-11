@@ -4,11 +4,86 @@ use alloy_sol_types::SolValue;
 use proc_macro::TokenStream;
 use quote::{format_ident, quote};
 use syn::{
-    parse_macro_input, spanned::Spanned, Data, DeriveInput, Fields, ImplItem, ImplItemMethod, ItemImpl, ItemTrait, LitStr, Meta, NestedMeta, ReturnType, TraitItem
+    parse_macro_input,  Data, DeriveInput, Fields, ImplItem, ImplItemMethod,
+    ItemImpl, ItemTrait, ReturnType, TraitItem,
 };
 
 mod helpers;
-use crate::helpers::{MethodInfo, InterfaceCompilationTarget, InterfaceArgs};
+use crate::helpers::{InterfaceArgs, InterfaceCompilationTarget, MethodInfo};
+
+#[proc_macro_derive(CustomError)]
+pub fn error_derive(input: TokenStream) -> TokenStream {
+    let input = parse_macro_input!(input as DeriveInput);
+    let name = &input.ident;
+
+    let variants = if let Data::Enum(data) = &input.data {
+        &data.variants
+    } else {
+        panic!("`Error` must be an enum");
+    };
+
+    // Generate signature building code for each variant
+    let variant_signatures = variants.iter().map(|variant| {
+        let variant_name = &variant.ident;
+        
+        let signature = match &variant.fields {
+            Fields::Unit => {
+                format!("{}::{}", name, variant_name)
+            },
+            Fields::Unnamed(fields) => {
+                let type_names: Vec<_> = fields.unnamed.iter()
+                    .map(|f| helpers::rust_type_to_sol_type(&f.ty)
+                        .expect("Unknown type")
+                        .sol_type_name()
+                        .into_owned()
+                    ).collect();
+                
+                format!("{}::{}({})",
+                    name,
+                    variant_name,
+                    type_names.join(",")
+                )
+            },
+            Fields::Named(_) => panic!("Named fields are not supported"),
+        };
+
+        let variant_pattern = match &variant.fields {
+            Fields::Unit => quote! { #name::#variant_name },
+            Fields::Unnamed(fields) => {
+                let vars: Vec<_> = (0..fields.unnamed.len())
+                    .map(|i| format_ident!("_{}", i))
+                    .collect();
+                quote! { #name::#variant_name(#(#vars),*) }
+            },
+            Fields::Named(_) => panic!("Named fields are not supported"),
+        };
+
+        quote! {
+            #variant_pattern => {
+                let mut res = Vec::new();
+                res.extend_from_slice(keccak256(#signature.as_bytes()).as_slice());
+                res
+            }
+        }
+    });
+
+    let expanded = quote! {
+        #[show_streams]
+        impl eth_riscv_runtime::err::Error for #name {
+            fn abi_encode(&self) -> alloc::vec::Vec<u8> {
+                use alloy_core::primitives::keccak256;
+                use alloc::vec::Vec;
+
+                match self {
+                    #(#variant_signatures),*
+                }
+            }
+        }
+    };
+
+    TokenStream::from(expanded)
+}
+
 
 #[proc_macro_derive(Event, attributes(indexed))]
 pub fn event_derive(input: TokenStream) -> TokenStream {
@@ -147,18 +222,31 @@ pub fn contract(_attr: TokenStream, item: TokenStream) -> TokenStream {
         let return_handling = match &method.sig.output {
             ReturnType::Default => {
                 // No return value
-                quote! {
-                    self.#method_name(#( #arg_names ),*);
-                }
+                quote! { self.#method_name(#( #arg_names ),*); }
             }
-            ReturnType::Type(_, return_type) => {
-                // Has return value
-                quote! {
-                    let result: #return_type = self.#method_name(#( #arg_names ),*);
-                    let result_bytes = result.abi_encode();
-                    let result_size = result_bytes.len() as u64;
-                    let result_ptr = result_bytes.as_ptr() as u64;
-                    eth_riscv_runtime::return_riscv(result_ptr, result_size);
+           ReturnType::Type(_, return_type) => {
+                if helpers::validate_return_type(return_type.as_ref()) {
+                    quote! {
+                        match self.#method_name(#( #arg_names ),*) {
+                            Ok(success) => {
+                                let result_bytes = success.abi_encode();
+                                let result_size = result_bytes.len() as u64;
+                                let result_ptr = result_bytes.as_ptr() as u64;
+                                eth_riscv_runtime::return_riscv(result_ptr, result_size);
+                            }
+                            Err(err) => {
+                                eth_riscv_runtime::revert_with_error(&err.abi_encode());
+                            }
+                        }
+                    }
+                } else {
+                    quote! {
+                        let result = self.#method_name(#( #arg_names ),*);
+                        let result_bytes = result.abi_encode();
+                        let result_size = result_bytes.len() as u64;
+                        let result_ptr = result_bytes.as_ptr() as u64;
+                        eth_riscv_runtime::return_riscv(result_ptr, result_size);
+                    }
                 }
             }
         };
@@ -225,7 +313,12 @@ pub fn contract(_attr: TokenStream, item: TokenStream) -> TokenStream {
 
     // Generate the interface
     let interface_name = format_ident!("I{}", struct_name);
-    let interface = helpers::generate_interface(&public_methods, &interface_name, None, InterfaceCompilationTarget::R55);
+    // let interface = helpers::generate_interface(
+    //     &public_methods,
+    //     &interface_name,
+    //     None,
+    //     InterfaceCompilationTarget::R55,
+    // );
 
     // Generate initcode for deployments
     let deployment_code = helpers::generate_deployment_code(struct_name, constructor);
@@ -250,12 +343,13 @@ pub fn contract(_attr: TokenStream, item: TokenStream) -> TokenStream {
         #[cfg(not(feature = "deploy"))]
         pub mod interface {
             use super::*;
-            #interface
+           // #interface
         }
 
         // Generate the call method implementation privately
         // only when not in `interface-only` mode
         #[cfg(not(any(feature = "deploy", feature = "interface-only")))]
+        #[allow(non_local_definitions)]
         mod implementation {
             use super::*;
             use alloy_sol_types::SolValue;

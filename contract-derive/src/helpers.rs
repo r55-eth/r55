@@ -287,7 +287,7 @@ pub fn generate_selector_evm(method: &MethodInfo, style: Option<InterfaceNamingS
 
 // Helper function to convert rust types to their solidity equivalent
 // TODO: make sure that the impl is robust, so far only tested with "simple types"
-fn rust_type_to_sol_type(ty: &Type) -> Result<DynSolType, &'static str> {
+pub fn rust_type_to_sol_type(ty: &Type) -> Result<DynSolType, &'static str> {
     match ty {
         Type::Path(type_path) => {
             let path = &type_path.path;
@@ -409,6 +409,43 @@ fn to_camel_case(s: String) -> String {
     }
     
     result
+}
+
+pub fn validate_return_type(return_type: &syn::Type) -> bool {
+    let path = match return_type {
+        syn::Type::Path(path) => path,
+        _ => return false
+    };
+
+    // Get Result segment
+    let result_segment = match path.path.segments.first() {
+        Some(seg) if seg.ident == "Result" => seg,
+        _ => return false
+    };
+
+    // Get generic arguments
+    let args = match &result_segment.arguments {
+        syn::PathArguments::AngleBracketed(args) => args,
+        _ => panic!("Result must have generic parameters")
+    };
+
+    // Get error type
+    let error_path = match args.args.iter().nth(1) {
+        Some(syn::GenericArgument::Type(syn::Type::Path(path))) => path,
+        _ => panic!("Result type must have a valid error type parameter")
+    };
+
+    // Validate error type
+    let error_segment = error_path.path.segments.last()
+        .expect("Invalid error type path");
+
+    // Validate error naming convention
+    if !error_segment.ident.to_string().ends_with("Error") {
+        panic!("Error type must end with 'Error'");
+    }
+
+    // Ensure it's a simple enum
+    matches!(&error_segment.arguments, syn::PathArguments::None)
 }
 
 // Helper function to generate the deployment code

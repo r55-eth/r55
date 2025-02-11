@@ -2,7 +2,7 @@
 #![no_main]
 #![feature(alloc_error_handler, maybe_uninit_write_slice, round_char_boundary)]
 
-use alloy_core::primitives::{Address, Bytes, B256, U256};
+use alloy_core::primitives::{Address, U256, Bytes};
 use core::arch::asm;
 use core::panic::PanicInfo;
 use core::slice;
@@ -12,6 +12,9 @@ mod alloc;
 pub mod block;
 pub mod types;
 pub mod tx;
+
+pub mod err;
+pub use err::{revert, revert_with_error, Error};
 
 pub mod log;
 pub use log::{emit_log, Event};
@@ -78,13 +81,6 @@ pub fn sstore(key: U256, value: U256) {
     }
 }
 
-pub fn revert() -> ! {
-    unsafe {
-        asm!("ecall", in("t0") u8::from(Syscall::Revert));
-    }
-    unreachable!()
-}
-
 pub fn keccak256(offset: u64, size: u64) -> U256 {
     let (first, second, third, fourth): (u64, u64, u64, u64);
     unsafe {
@@ -133,19 +129,6 @@ pub fn msg_data() -> &'static [u8] {
         length[0], length[1], length[2], length[3], length[4], length[5], length[6], length[7],
     ]) as usize;
     unsafe { slice_from_raw_parts(CALLDATA_ADDRESS + 8, length) }
-}
-
-pub fn log(data_ptr: u64, data_size: u64, topics_ptr: u64, topics_size: u64) {
-    unsafe {
-        asm!(
-            "ecall",
-            in("a0") data_ptr,
-            in("a1") data_size,
-            in("a2") topics_ptr,
-            in("a3") topics_size,
-            in("t0") u8::from(Syscall::Log)
-        );
-    }
 }
 
 #[allow(non_snake_case)]

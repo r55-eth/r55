@@ -3,10 +3,10 @@
 
 use core::default::Default;
 
-use contract_derive::{contract, payable, storage, Event};
+use contract_derive::{contract, payable, show_streams, storage, Event, CustomError};
 use eth_riscv_runtime::types::*;
 
-use alloy_core::primitives::{address, Address, U256};
+use alloy_core::primitives::{address, Address, U256, Bytes};
 
 extern crate alloc;
 use alloc::string::String;
@@ -20,6 +20,14 @@ pub struct ERC20 {
     // name: String,
     // symbol: String,
     // decimals: u8,
+}
+
+#[derive(CustomError)]
+#[show_streams]
+pub enum ERC20Error {
+    OnlyOwner,
+    InsufficientFunds(U256, U256),
+    InsufficientApproval(Address)
 }
 
 #[derive(Event)]
@@ -75,6 +83,27 @@ impl ERC20 {
         true
     }
 
+    pub fn r55_mint(&mut self, to: Address, value: U256) -> Result<bool, ERC20Error> {
+        // only the owner can mint
+        if msg_sender() != self.owner.read() {
+            return Err(ERC20Error::InsufficientApproval(Address::ZERO))
+        };
+
+        // increase user balance
+        let to_balance = self.balances.read(to);
+        self.balances.write(to, to_balance + value);
+        log::emit(Transfer::new(
+            address!("0000000000000000000000000000000000000000"),
+            to,
+            value,
+        ));
+
+        // increase total supply
+        self.total_supply += value;
+        
+        Ok(true)
+    }
+
     pub fn approve(&mut self, spender: Address, value: U256) -> bool {
         let mut spender_allowances = self.allowances.read(msg_sender());
         spender_allowances.write(spender, value);
@@ -109,6 +138,13 @@ impl ERC20 {
         self.balances.write(recipient, recipient_balance + amount);
 
         true
+    }
+
+    fn transfer_ownership(&mut self, new_owner: Address) -> Result<(), ERC20Error> {
+        self._only_owner()?;
+        self.owner().write(owner);
+
+        Ok(())
     }
 
     // -- GETTER FUNCTIONS ----------------------------------------------------
