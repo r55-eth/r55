@@ -25,10 +25,6 @@ impl EVMCaller {
     }
 
     pub fn x_get(&self, target: Address) -> U256 {
-        match ISimpleStorage::new(target).get() {
-            Some(value) => value,
-            // easily add fallback logic if desired
-            _ => eth_riscv_runtime::revert(),
-        }
+        ISimpleStorage::new(target).get()
     }
 }

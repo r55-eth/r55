@@ -22,8 +22,8 @@ pub fn error_derive(input: TokenStream) -> TokenStream {
         panic!("`Error` must be an enum");
     };
 
-    // Generate signature building code for each variant
-    let variant_signatures = variants.iter().map(|variant| {
+    // Generate error encodding for each variant
+    let encode_arms = variants.iter().map(|variant| {
         let variant_name = &variant.ident;
         
         let signature = match &variant.fields {
@@ -47,7 +47,7 @@ pub fn error_derive(input: TokenStream) -> TokenStream {
             Fields::Named(_) => panic!("Named fields are not supported"),
         };
 
-        let variant_pattern = match &variant.fields {
+        let pattern = match &variant.fields {
             Fields::Unit => quote! { #name::#variant_name },
             Fields::Unnamed(fields) => {
                 let vars: Vec<_> = (0..fields.unnamed.len())
@@ -58,12 +58,68 @@ pub fn error_derive(input: TokenStream) -> TokenStream {
             Fields::Named(_) => panic!("Named fields are not supported"),
         };
 
+        // non-unit variants must encode the data
+        let data = match &variant.fields {
+            Fields::Unit => quote! {},
+            Fields::Unnamed(fields) => {
+                let vars = (0..fields.unnamed.len())
+                    .map(|i| format_ident!("_{}", i));
+                quote! { #( res.extend_from_slice(&#vars.abi_encode()); )* }
+            },
+            Fields::Named(_) => panic!("Named fields are not supported"),
+        };
+
         quote! {
-            #variant_pattern => {
+            #pattern => {
                 let mut res = Vec::new();
-                res.extend_from_slice(keccak256(#signature.as_bytes()).as_slice());
+                let selector = keccak256(#signature.as_bytes())[..4].to_vec();
+                res.extend_from_slice(&selector);
+                #data
                 res
             }
+        }
+    });
+
+
+    // Generate error encodding for each variant
+    let decode_arms = variants.iter().map(|variant| {
+        let variant_name = &variant.ident;
+        
+        let signature = match &variant.fields {
+            Fields::Unit => {
+                format!("{}::{}", name, variant_name)
+            },
+            Fields::Unnamed(fields) => {
+                let type_names: Vec<_> = fields.unnamed.iter()
+                    .map(|f| helpers::rust_type_to_sol_type(&f.ty)
+                        .expect("Unknown type")
+                        .sol_type_name()
+                        .into_owned()
+                    ).collect();
+                
+                format!("{}::{}({})",
+                    name,
+                    variant_name,
+                    type_names.join(",")
+                )
+            },
+            Fields::Named(_) => panic!("Named fields are not supported"),
+        };
+
+        let selector = quote!{ keccak256(#signature.as_bytes()[..4].to_vec()) };
+
+        match &variant.fields {
+            Fields::Unit => quote! { selector if selector == #selector => #name::#variant_name },
+            Fields::Unnamed(fields) => {
+                let field_types: Vec<_> = fields.unnamed.iter().map(|f| &f.ty).collect();
+                let indices: Vec<_> = (0..fields.unnamed.len()).collect();
+                quote!{ s if s == #selector => {
+                    let mut values = Vec::new();
+                    #( values.push(<#field_types>::abi_decode(data, true).expect("Unable to decode")); )*
+                    #name::#variant_name(#(values[#indices]),*)
+                }} 
+            },
+            Fields::Named(_) => panic!("Named fields are not supported"),
         }
     });
 
@@ -74,8 +130,21 @@ pub fn error_derive(input: TokenStream) -> TokenStream {
                 use alloy_core::primitives::keccak256;
                 use alloc::vec::Vec;
 
-                match self {
-                    #(#variant_signatures),*
+                match self { #(#encode_arms),* }
+            }
+
+            fn abi_decode(bytes: &[u8], validate: bool) -> Self {
+                use alloy_core::primitives::keccak256;
+                use alloy_sol_types::SolValue;
+                use alloc::vec::Vec;
+
+                if bytes.len() < 4 { eth_riscv_runtime::revert() };
+                let selector = &bytes[..4];
+                let data = &bytes[4..];
+
+                match selector {
+                    #(#decode_arms),*,
+                    _ => eth_riscv_runtime::revert()
                 }
             }
         }
@@ -313,12 +382,12 @@ pub fn contract(_attr: TokenStream, item: TokenStream) -> TokenStream {
 
     // Generate the interface
     let interface_name = format_ident!("I{}", struct_name);
-    // let interface = helpers::generate_interface(
-    //     &public_methods,
-    //     &interface_name,
-    //     None,
-    //     InterfaceCompilationTarget::R55,
-    // );
+    let interface = helpers::generate_interface(
+        &public_methods,
+        &interface_name,
+        None,
+        InterfaceCompilationTarget::R55,
+    );
 
     // Generate initcode for deployments
     let deployment_code = helpers::generate_deployment_code(struct_name, constructor);
@@ -343,7 +412,7 @@ pub fn contract(_attr: TokenStream, item: TokenStream) -> TokenStream {
         #[cfg(not(feature = "deploy"))]
         pub mod interface {
             use super::*;
-           // #interface
+            #interface
         }
 
         // Generate the call method implementation privately

@@ -86,7 +86,7 @@ impl ERC20 {
     pub fn r55_mint(&mut self, to: Address, value: U256) -> Result<bool, ERC20Error> {
         // only the owner can mint
         if msg_sender() != self.owner.read() {
-            return Err(ERC20Error::InsufficientApproval(Address::ZERO))
+            return Err(ERC20Error::InsufficientApproval(address!("EeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE")))
         };
 
         // increase user balance

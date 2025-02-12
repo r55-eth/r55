@@ -7,6 +7,7 @@ use crate::Syscall;
 
 pub trait Error {
     fn abi_encode(&self) -> Vec<u8>;
+    fn abi_decode(bytes: &[u8], validate: bool) -> Self;
 }
 
 pub fn revert() -> ! { revert_with_error(Vec::new().as_slice()) }

@@ -11,7 +11,7 @@ pub trait Contract {
     fn call_with_data(&mut self, calldata: &[u8]);
 }
 
-pub fn call_contract(addr: Address, value: u64, data: &[u8], ret_size: Option<u64>) -> Option<Bytes> {
+pub fn call_contract(addr: Address, value: u64, data: &[u8], ret_size: Option<u64>) -> Bytes {
     // Perform the call without writting return data into (REVM) memory
     call(addr, value, data.as_ptr() as u64, data.len() as u64);
 
@@ -20,7 +20,7 @@ pub fn call_contract(addr: Address, value: u64, data: &[u8], ret_size: Option<u6
         Some(size) => size,
         None => return_data_size(),
     };
-    if ret_size == 0 { return Some(Bytes::default())};
+    if ret_size == 0 { return Bytes::default() };
 
     let mut ret_data = Vec::with_capacity(ret_size as usize);
     ret_data.resize(ret_size as usize, 0);
@@ -32,7 +32,7 @@ pub fn call_contract(addr: Address, value: u64, data: &[u8], ret_size: Option<u6
         return_data_copy(offset + step, step, 32)
     };
 
-    Some(Bytes::from(ret_data))
+    Bytes::from(ret_data)
 }
 
 pub fn call(addr: Address, value: u64, data_offset: u64, data_size: u64) {

@@ -3,11 +3,10 @@ use std::error::Error;
 use alloy_core::primitives::keccak256;
 use alloy_dyn_abi::DynSolType;
 use alloy_sol_types::SolType;
+use proc_macro2::TokenStream;
 use quote::{format_ident, quote};
 use syn::{
-    parse::{Parse, ParseStream},
-    spanned::Spanned,
-    FnArg, Ident, ImplItemMethod, Meta, ReturnType, TraitItemMethod, Type,
+    parse::{Parse, ParseStream}, spanned::Spanned, FnArg, Ident, ImplItemMethod, Meta, PathArguments, ReturnType, TraitItemMethod, Type
 };
 
 // Unified method info from `ImplItemMethod` and `TraitItemMethod`
@@ -174,7 +173,6 @@ where
     // Generate implementation
     let method_impls = methods.iter().map(|method| {
         let name = method.name;
-        let return_type = method.return_type;
         let method_selector = match interface_target {
             InterfaceCompilationTarget::R55 => u32::from_be_bytes(
                 generate_selector_r55(method, interface_style).expect("Unable to generate r55 fn selector"),
@@ -210,26 +208,52 @@ where
             }
         };
 
-        let return_ty = match return_type {
-            ReturnType::Default => quote! { () },
-            ReturnType::Type(_, ty) => quote! { #ty },
-        };
+        // Generate different implementations based on return type
+        match extract_result_types(&method.return_type) {
+            // If `Result<T, E>` handle each individual type
+            Some((ok_type, err_type)) => quote! {
+                pub fn #name(&self, #(#arg_names: #arg_types),*) -> Result<#ok_type, #err_type> {
+                    use alloy_sol_types::SolValue;
+                    use alloc::vec::Vec;
 
-        quote! {
-            pub fn #name(&self, #(#arg_names: #arg_types),*) -> Option<#return_ty> {
-                use alloy_sol_types::SolValue;
-                use alloc::vec::Vec;
+                    #calldata
 
-                #calldata
+                    let result = eth_riscv_runtime::call_contract(
+                        self.address,
+                        0_u64,
+                        &complete_calldata,
+                        None
+                    );
 
-                let result = eth_riscv_runtime::call_contract(
-                    self.address,
-                    0_u64,
-                    &complete_calldata,
-                    None
-                )?;
+                    match <#ok_type>::abi_decode(&result, true) {
+                        Ok(decoded) => Ok(decoded),
+                        Err(_) => Err(<#err_type>::abi_decode(&result[4..], true))
+                    }
+                }
+            },
+            // Otherwise, simply abi_decode the value
+            None => {
+                let return_ty = match &method.return_type {
+                    ReturnType::Default => quote! { () },
+                    ReturnType::Type(_, ty) => quote! { #ty },
+                };
+                quote! {
+                    pub fn #name(&self, #(#arg_names: #arg_types),*) -> #return_ty {
+                        use alloy_sol_types::SolValue;
+                        use alloc::vec::Vec;
 
-                <#return_ty>::abi_decode(&result, true).ok()
+                        #calldata
+
+                        let result = eth_riscv_runtime::call_contract(
+                            self.address,
+                            0_u64,
+                            &complete_calldata,
+                            None
+                        );
+
+                        <#return_ty>::abi_decode(&result, true).expect("Unable to decode")
+                    }
+                }
             }
         }
     });
@@ -248,6 +272,45 @@ where
         }
     }
 }
+
+// Helper function to extract Result types if present
+fn extract_result_types(return_type: &ReturnType) -> Option<(TokenStream, TokenStream)> {
+    let type_path = match return_type {
+        ReturnType::Default => return None,
+        ReturnType::Type(_, ty) => match ty.as_ref() {
+            Type::Path(type_path) => type_path,
+            _ => return None,
+        },
+    };
+
+    let last_segment = type_path.path.segments.last()?;
+    if last_segment.ident != "Result" {
+        return None;
+    }
+
+    let PathArguments::AngleBracketed(args) = &last_segment.arguments else {
+        return None;
+    };
+
+    let type_args: Vec<_> = args.args.iter().collect();
+    if type_args.len() != 2 {
+        return None;
+    }
+
+    // Convert the generic arguments to TokenStreams directly
+    let ok_type = match &type_args[0] {
+        syn::GenericArgument::Type(t) => quote!(#t),
+        _ => return None,
+    };
+
+    let err_type = match &type_args[1] {
+        syn::GenericArgument::Type(t) => quote!(#t),
+        _ => return None,
+    };
+
+    Some((ok_type, err_type))
+}
+
 
 // Helper function to generate fn selector for r55 contracts
 pub fn generate_selector_r55(method: &MethodInfo, style: Option<InterfaceNamingStyle>) -> Option<[u8; 4]> {
