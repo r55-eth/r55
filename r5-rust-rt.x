@@ -7,6 +7,15 @@ MEMORY
   REST_OF_RAM : ORIGIN = 0x80300000, LENGTH = 1021M
 }
 
+SECTIONS
+{
+  /DISCARD/ : {
+    *(.eh_frame)
+    *(.eh_frame_hdr)
+    *(.eh_frame.*)
+  }
+}
+
 REGION_ALIAS("REGION_TEXT", REST_OF_RAM);
 REGION_ALIAS("REGION_RODATA", REST_OF_RAM);
 REGION_ALIAS("REGION_DATA", REST_OF_RAM);

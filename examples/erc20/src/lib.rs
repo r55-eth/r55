@@ -4,7 +4,7 @@
 use core::default::Default;
 
 use contract_derive::{contract, payable, storage, Event};
-use eth_riscv_runtime::types::{Mapping, Slot, StorageLayout};
+use eth_riscv_runtime::types::*;
 
 use alloy_core::primitives::{address, Address, U256};
 
@@ -14,8 +14,9 @@ use alloc::string::String;
 #[storage]
 pub struct ERC20 {
     total_supply: Slot<U256>,
-    balances: Mapping<Address, U256>,
-    allowances: Mapping<Address, Mapping<Address, U256>>,
+    balances: Mapping<Address, Slot<U256>>,
+    allowances: Mapping<Address, Mapping<Address, Slot<U256>>>,
+    owner: Slot<Address>,
     // name: String,
     // symbol: String,
     // decimals: u8,
@@ -41,11 +42,23 @@ pub struct Mint {
 
 #[contract]
 impl ERC20 {
+    // -- CONSTRUCTOR ---------------------------------------------------------
+    pub fn new(owner: Address) -> Self {
+        // init the contract
+        let mut erc20 = ERC20::default();
+
+        // store the owner
+        erc20.owner.write(owner);
+
+        // return the initialized contract
+        erc20
+    }
+
     // -- STATE MODIFYING FUNCTIONS -------------------------------------------
     #[payable]
     pub fn mint(&mut self, to: Address, value: U256) -> bool {
-        // TODO: implement constructors and store contract owner
-        let _owner = msg_sender();
+        // only the owner can mint
+        if msg_sender() != self.owner.read() { return false };
 
         // increase user balance
         let to_balance = self.balances.read(to);
@@ -58,7 +71,7 @@ impl ERC20 {
 
         // increase total supply
         self.total_supply += value;
-
+        
         true
     }
 
@@ -99,6 +112,9 @@ impl ERC20 {
     }
 
     // -- GETTER FUNCTIONS ----------------------------------------------------
+    pub fn owner(&self) -> Address {
+        self.owner.read()
+    }
 
     pub fn total_supply(&self) -> U256 {
         self.total_supply.read()

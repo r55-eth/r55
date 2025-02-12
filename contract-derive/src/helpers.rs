@@ -1,12 +1,10 @@
-use std::error::Error;
-
 use alloy_core::primitives::keccak256;
 use alloy_dyn_abi::DynSolType;
 use proc_macro2::TokenStream;
 use quote::{format_ident, quote};
 use syn::{
     parse::{Parse, ParseStream},
-    FnArg, Ident, ImplItemMethod, Meta, ReturnType, TraitItemMethod, Type,
+    FnArg, Ident, ImplItemMethod, ReturnType, TraitItemMethod, Type,
 };
 
 // Unified method info from `ImplItemMethod` and `TraitItemMethod`
@@ -192,6 +190,7 @@ where
         .map(|method| generate_method_impl(method, interface_target, interface_style, false));
 
     quote! {
+        use core::marker::PhantomData;
         pub struct #interface_name<C: CallCtx> {
             address: Address,
             _ctx: PhantomData<C>
@@ -488,16 +487,39 @@ fn to_camel_case(s: String) -> String {
 
 // Helper function to generate the deployment code
 pub fn generate_deployment_code(
-    _struct_name: &Ident,
+    struct_name: &Ident,
     constructor: Option<&ImplItemMethod>,
 ) -> quote::__private::TokenStream {
+    // Decode constructor args + trigger constructor logic
+    let constructor_code = match constructor {
+        Some(method) => {
+            let method_info = MethodInfo::from(method);
+            let (arg_names, arg_types) = get_arg_props_all(&method_info);
+            quote! {
+                impl #struct_name { #method }
+
+                // Get encoded constructor args
+                let calldata = eth_riscv_runtime::msg_data();
+
+                let (#(#arg_names),*) = <(#(#arg_types),*)>::abi_decode(&calldata, true)
+                    .expect("Failed to decode constructor args");
+                #struct_name::new(#(#arg_names),*);
+            }
+        }
+        None => quote! {
+            #struct_name::default();
+        },
+    };
+
     quote! {
         use alloc::vec::Vec;
+        use alloy_core::primitives::U32;
 
         #[no_mangle]
         pub extern "C" fn main() -> ! {
-            // TODO: figure out constructor
+            #constructor_code
 
+            // Return runtime code
             let runtime: &[u8] = include_bytes!("../target/riscv64imac-unknown-none-elf/release/runtime");
             let mut prepended_runtime = Vec::with_capacity(1 + runtime.len());
             prepended_runtime.push(0xff);

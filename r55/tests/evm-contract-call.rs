@@ -7,11 +7,14 @@ use r55::{
         add_balance_to_db, get_selector_from_sig, initialize_logger, load_bytecode_from_file,
     },
 };
-use revm::{ primitives::{address, Address}, InMemoryDB };
+use revm::{
+    primitives::{address, Address},
+    InMemoryDB,
+};
 use tracing::{debug, error, info};
 
-const EVM_PATH: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/tests/simple.txt");
-const RISCV_PATH: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/../evm-caller");
+const EVM_PATH: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/tests/simple-evm-contract.txt");
+const RISCV_PATH: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/../examples/evm-caller");
 
 // ------------------------------------------------------------------------------------------------
 //    SIMPLE EVM CONTRACT
@@ -41,16 +44,14 @@ fn evm_call() {
     println!("PATH: {:#?}", EVM_PATH);
     let bytecode_evm = load_bytecode_from_file(EVM_PATH);
     let bytecode_r55 = compile_with_prefix(compile_deploy, RISCV_PATH).unwrap();
-    let evm = deploy_contract(&mut db, bytecode_evm).unwrap();
-    let r55 = deploy_contract(&mut db, bytecode_r55).unwrap();
+    let evm = deploy_contract(&mut db, bytecode_evm, None).unwrap();
+    let r55 = deploy_contract(&mut db, bytecode_r55, None).unwrap();
 
     let selector_get = get_selector_from_sig("get()");
     let selector_set = get_selector_from_sig("set(uint256)");
     let selector_raw_call = get_selector_from_sig("rawCall((address,bytes))");
     let selector_x_get = get_selector_from_sig("x_get");
     let selector_x_set = get_selector_from_sig("x_set");
-    let selector_x_raw_call = get_selector_from_sig("x_raw_call");
-
 
     let alice: Address = address!("000000000000000000000000000000000000000A");
     add_balance_to_db(&mut db, alice, 1e18 as u64);

@@ -1,18 +1,15 @@
-use alloy_primitives::{Bytes, U256};
+use alloy_primitives::{address, Address, Bytes, U256};
 use alloy_sol_types::SolValue;
 use r55::{
     compile_deploy, compile_with_prefix,
     exec::{deploy_contract, run_tx},
     test_utils::{add_balance_to_db, get_selector_from_sig, initialize_logger},
 };
-use revm::{
-    primitives::{address, Address},
-    InMemoryDB,
-};
+use revm::InMemoryDB;
 use tracing::{debug, error, info};
 
-const ERC20_PATH: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/../erc20");
-const ERC20X_PATH: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/../erc20x");
+const ERC20_PATH: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/../examples/erc20");
+const ERC20X_PATH: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/../examples/erc20x");
 
 #[test]
 fn erc20() {
@@ -20,10 +17,15 @@ fn erc20() {
 
     let mut db = InMemoryDB::default();
 
+    let alice: Address = address!("000000000000000000000000000000000000000A");
+    add_balance_to_db(&mut db, alice, 1e18 as u64);
+
+    let constructor = alice.abi_encode();
+
     let bytecode = compile_with_prefix(compile_deploy, ERC20_PATH).unwrap();
     let bytecode_x = compile_with_prefix(compile_deploy, ERC20X_PATH).unwrap();
-    let erc20 = deploy_contract(&mut db, bytecode).unwrap();
-    let erc20_x = deploy_contract(&mut db, bytecode_x).unwrap();
+    let erc20 = deploy_contract(&mut db, bytecode, Some(constructor)).unwrap();
+    let erc20_x = deploy_contract(&mut db, bytecode_x, None).unwrap();
 
     let total_supply = get_selector_from_sig("total_supply");
     let selector_balance = get_selector_from_sig("balance_of");
@@ -35,8 +37,6 @@ fn erc20() {
     let mut calldata_balance = alice.abi_encode();
     let mut calldata_mint = (alice, value_mint).abi_encode();
     let mut calldata_x_balance = (alice, erc20).abi_encode();
-
-    add_balance_to_db(&mut db, alice, 1e18 as u64);
 
     let mut complete_calldata_balance = selector_balance.to_vec();
     complete_calldata_balance.append(&mut calldata_balance);

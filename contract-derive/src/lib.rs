@@ -4,8 +4,8 @@ use alloy_sol_types::SolValue;
 use proc_macro::TokenStream;
 use quote::{format_ident, quote};
 use syn::{
-    parse_macro_input, spanned::Spanned, Data, DeriveInput, Fields, ImplItem, ImplItemMethod,
-    ItemImpl, ItemTrait, LitStr, Meta, NestedMeta, ReturnType, TraitItem,
+    parse_macro_input, Data, DeriveInput, Fields, ImplItem, ImplItemMethod,
+    ItemImpl, ItemTrait, ReturnType, TraitItem,
 };
 
 mod helpers;
@@ -119,6 +119,10 @@ pub fn contract(_attr: TokenStream, item: TokenStream) -> TokenStream {
         }
     }
 
+    let input_methods: Vec<_> = public_methods
+        .iter()
+        .map(|method| quote! { #method })
+        .collect();
     let match_arms: Vec<_> = public_methods.iter().map(|method| {
         let method_name = &method.sig.ident;
         let method_selector = u32::from_be_bytes(
@@ -235,13 +239,16 @@ pub fn contract(_attr: TokenStream, item: TokenStream) -> TokenStream {
         #[cfg(feature = "deploy")]
             pub mod deploy {
             use super::*;
+            use alloy_sol_types::SolValue;
+            use eth_riscv_runtime::*;
+
+            #emit_helper
             #deployment_code
         }
 
         // Public interface module
         #[cfg(not(feature = "deploy"))]
         pub mod interface {
-            use core::marker::PhantomData;
             use super::*;
             #interface
         }
@@ -254,9 +261,9 @@ pub fn contract(_attr: TokenStream, item: TokenStream) -> TokenStream {
             use alloy_sol_types::SolValue;
             use eth_riscv_runtime::*;
 
-            #input
             #emit_helper
 
+            impl #struct_name { #(#input_methods)* }
             impl Contract for #struct_name {
                 fn call(&mut self) {
                     self.call_with_data(&msg_data());
