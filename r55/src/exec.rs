@@ -533,7 +533,7 @@ fn execute_call(
     emu: &mut Emulator,
     interpreter: &mut Interpreter,
     host: &mut dyn Host,
-    is_static: bool
+    is_static: bool,
 ) -> Result<InterpreterAction> {
     let a0: u64 = emu.cpu.xregs.read(10);
     let a1: u64 = emu.cpu.xregs.read(11);
@@ -573,7 +573,7 @@ fn execute_call(
     let call_gas_limit = interpreter.gas.remaining();
     syscall_gas!(interpreter, call_gas_limit);
 
-    debug!("> {}Call context:", if is_static {"Static"} else {""} );
+    debug!("> {}Call context:", if is_static { "Static" } else { "" });
     debug!("  - Caller: {}", interpreter.contract.target_address);
     debug!("  - Target Address: {}", addr);
     debug!("  - Value: {}", value);
