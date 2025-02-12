@@ -2,10 +2,8 @@
 #![no_main]
 #![feature(alloc_error_handler, maybe_uninit_write_slice, round_char_boundary)]
 
-use alloy_core::primitives::{Address, U256, Bytes};
-use core::arch::asm;
-use core::panic::PanicInfo;
-use core::slice;
+use alloy_core::primitives::{Address, U256};
+use core::{arch::asm, panic::PanicInfo, slice};
 pub use riscv_rt::entry;
 
 mod alloc;
@@ -20,7 +18,7 @@ pub mod log;
 pub use log::{emit_log, Event};
 
 pub mod call;
-pub use call::{call_contract, Contract, return_data_copy, return_data_size};
+pub use call::*;
 
 const CALLDATA_ADDRESS: usize = 0x8000_0000;
 

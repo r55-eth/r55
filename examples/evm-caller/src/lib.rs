@@ -20,11 +20,11 @@ trait ISimpleStorage {
 
 #[contract]
 impl EVMCaller {
-    pub fn x_set(&self, target: Address, value: U256) {
-        ISimpleStorage::new(target).set(value);
+    pub fn x_set(&mut self, target: Address, value: U256) {
+        ISimpleStorage::new(target).with_ctx(self).set(value);
     }
 
     pub fn x_get(&self, target: Address) -> U256 {
-        ISimpleStorage::new(target).get()
+        ISimpleStorage::new(target).with_ctx(self).get()
     }
 }

@@ -8,6 +8,7 @@ edition = "2021"
 [features]
 default = []
 deploy = []
+interface-only = []
 
 [dependencies]
 contract-derive = { path = "../../contract-derive" }

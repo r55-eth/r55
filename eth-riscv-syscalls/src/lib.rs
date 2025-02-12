@@ -59,11 +59,12 @@ macro_rules! syscalls {
 // t0: 0x33, opcode for caller, returns an address
 // t0: 0x34, opcode for callvalue, a0: first limb, a1: second limb, a2: third limb, a3: fourth limb, returns 256-bit value
 // t0: 0x3A, opcode for gasprice, returns 256-bit value
-// t0: 0x3D, opcode for returndatasize, returns 64-bit value
-// t0: 0x3E, opcode for returndatacopy, a0: memory offset, a1: return data offset, a2: return data size, returns nothing
+// t0: 0x3d, opcode for returndatasize, returns 64-bit value
+// t0: 0x3e, opcode for returndatacopy, a0: memory offset, a1: return data offset, a2: return data size, returns nothing
 // t0: 0x54, opcode for sload, a0: storage key, returns 256-bit value
 // t0: 0x55, opcode for sstore, a0-a3: 256-bit storage key, a4-a7: 256-bit storage value, returns nothing
-// t0: 0xf1, opcode for call, args: TODO
+// t0: 0xf1, opcode for call, args: a0-a2: address, a3: 64-bit value, a4: calldata offset, a5: calldata size
+// t0: 0xfa, opcode for staticcall, args: a0-a2: address, a3: 64-bit value, a4: calldata offset, a5: calldata size
 // t0: 0xf3, opcode for return, a0: memory address of data, a1: length of data in bytes, doesn't return
 // t0: 0xfd, opcode for revert, doesn't return
 syscalls!(
@@ -82,6 +83,7 @@ syscalls!(
     (0x54, SLoad, "sload"),
     (0x55, SStore, "sstore"),
     (0xf1, Call, "call"),
+    (0xfa, StaticCall, "staticcall"),
     (0xf3, Return, "return"),
     (0xfd, Revert, "revert"),
     (0xA0, Log, "log"),

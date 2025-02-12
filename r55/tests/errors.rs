@@ -9,6 +9,7 @@ use revm::InMemoryDB;
 use tracing::{debug, error, info};
 
 const ERC20_PATH: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/../examples/erc20");
+const ERC20X_PATH: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/../examples/erc20x");
 
 #[test]
 fn erc20() {
@@ -20,27 +21,29 @@ fn erc20() {
     let bob: Address = address!("000000000000000000000000000000000000000B");
     add_balance_to_db(&mut db, alice, 1e18 as u64);
 
+    let bytecode_x = compile_with_prefix(compile_deploy, ERC20X_PATH).unwrap();
+    let erc20x = deploy_contract(&mut db, bytecode_x, None).unwrap();
+
     let constructor = bob.abi_encode();
-
     let bytecode = compile_with_prefix(compile_deploy, ERC20_PATH).unwrap();
-    let addr1 = deploy_contract(&mut db, bytecode, Some(constructor)).unwrap();
+    let erc20 = deploy_contract(&mut db, bytecode, Some(constructor)).unwrap();
 
-    let selector_mint = get_selector_from_sig("r55_mint");
     let alice: Address = address!("000000000000000000000000000000000000000A");
     let value_mint = U256::from(42e18);
-    let mut calldata_mint = (alice, value_mint).abi_encode();
 
-    let mut complete_calldata_mint = selector_mint.to_vec();
-    complete_calldata_mint.append(&mut calldata_mint);
+    let selector_x_mint = get_selector_from_sig("x_mint");
+    let mut complete_calldata_x_mint = selector_x_mint.to_vec();
+    let mut calldata_x_mint = (alice, value_mint, erc20).abi_encode();
+    complete_calldata_x_mint.append(&mut calldata_x_mint);
 
     info!("----------------------------------------------------------");
-    info!("-- MINT TX -----------------------------------------------");
+    info!("-- X-MINT TX (ERRORS) ------------------------------------");
     info!("----------------------------------------------------------");
     debug!(
         "Tx Calldata:\n> {:#?}",
-        Bytes::from(complete_calldata_mint.clone())
+        Bytes::from(complete_calldata_x_mint.clone())
     );
-    match run_tx(&mut db, &addr1, complete_calldata_mint.clone()) {
+    match run_tx(&mut db, &erc20x, complete_calldata_x_mint.clone()) {
         Ok(res) => info!("{}", res),
         Err(e) => {
             error!("Error when executing tx! {:#?}", e);

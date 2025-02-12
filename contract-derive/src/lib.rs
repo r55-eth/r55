@@ -4,7 +4,7 @@ use alloy_sol_types::SolValue;
 use proc_macro::TokenStream;
 use quote::{format_ident, quote};
 use syn::{
-    parse_macro_input,  Data, DeriveInput, Fields, ImplItem, ImplItemMethod,
+    parse_macro_input, Data, DeriveInput, Fields, ImplItem, ImplItemMethod,
     ItemImpl, ItemTrait, ReturnType, TraitItem,
 };
 
@@ -106,16 +106,16 @@ pub fn error_derive(input: TokenStream) -> TokenStream {
             Fields::Named(_) => panic!("Named fields are not supported"),
         };
 
-        let selector = quote!{ keccak256(#signature.as_bytes()[..4].to_vec()) };
+        let selector_bytes = quote!{ &keccak256(#signature.as_bytes())[..4].to_vec() };
 
         match &variant.fields {
-            Fields::Unit => quote! { selector if selector == #selector => #name::#variant_name },
+            Fields::Unit => quote! { selector if selector == #selector_bytes => #name::#variant_name },
             Fields::Unnamed(fields) => {
                 let field_types: Vec<_> = fields.unnamed.iter().map(|f| &f.ty).collect();
                 let indices: Vec<_> = (0..fields.unnamed.len()).collect();
-                quote!{ s if s == #selector => {
+                quote!{ selector if selector == #selector_bytes => {
                     let mut values = Vec::new();
-                    #( values.push(<#field_types>::abi_decode(data, true).expect("Unable to decode")); )*
+                    #( values.push(<#field_types>::abi_decode(data.unwrap(), true).expect("Unable to decode")); )*
                     #name::#variant_name(#(values[#indices]),*)
                 }} 
             },
@@ -140,7 +140,7 @@ pub fn error_derive(input: TokenStream) -> TokenStream {
 
                 if bytes.len() < 4 { eth_riscv_runtime::revert() };
                 let selector = &bytes[..4];
-                let data = &bytes[4..];
+                let data = if bytes.len() > 4 { Some(&bytes[4..]) } else { None };
 
                 match selector {
                     #(#decode_arms),*,
@@ -152,7 +152,6 @@ pub fn error_derive(input: TokenStream) -> TokenStream {
 
     TokenStream::from(expanded)
 }
-
 
 #[proc_macro_derive(Event, attributes(indexed))]
 pub fn event_derive(input: TokenStream) -> TokenStream {
@@ -278,11 +277,7 @@ pub fn contract(_attr: TokenStream, item: TokenStream) -> TokenStream {
 
         // Check if there are payable methods
         let checks = if !is_payable(&method) {
-            quote! {
-                if eth_riscv_runtime::msg_value() > U256::from(0) {
-                    revert();
-                }
-            }
+            quote! { if eth_riscv_runtime::msg_value() > U256::from(0) { revert(); } }
         } else {
             quote! {}
         };
@@ -506,7 +501,7 @@ pub fn interface(attr: TokenStream, item: TokenStream) -> TokenStream {
         .collect();
 
     // Generate intreface implementation
-    let interface = helpers::generate_interface(&methods, trait_name, args.rename, args.target);
+    let interface = helpers::generate_interface(&methods, trait_name, None, args.target);
 
     let output = quote! {
         #interface
