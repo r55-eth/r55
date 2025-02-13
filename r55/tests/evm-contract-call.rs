@@ -68,7 +68,7 @@ fn evm_call() {
         "Tx Calldata:\n> {:#?}",
         Bytes::from(complete_calldata_set.clone())
     );
-    match run_tx(&mut db, &evm, complete_calldata_set.clone()) {
+    match run_tx(&mut db, &evm, complete_calldata_set.clone(), &alice) {
         Ok(res) => info!("{}", res),
         Err(e) => {
             error!("Error when executing tx! {:#?}", e);
@@ -88,7 +88,7 @@ fn evm_call() {
         "Tx calldata:\n> {:#?}",
         Bytes::from(complete_calldata_x_get.clone())
     );
-    match run_tx(&mut db, &r55, complete_calldata_x_get.clone()) {
+    match run_tx(&mut db, &r55, complete_calldata_x_get.clone(), &alice) {
         Ok(res) => {
             assert_eq!(
                 U256::from_be_bytes::<32>(res.output.as_slice().try_into().unwrap()),
@@ -115,7 +115,7 @@ fn evm_call() {
         "Tx calldata:\n> {:#?}",
         Bytes::from(complete_calldata_x_set.clone())
     );
-    match run_tx(&mut db, &r55, complete_calldata_x_set.clone()) {
+    match run_tx(&mut db, &r55, complete_calldata_x_set.clone(), &alice) {
         Ok(res) => info!("{}", res),
         Err(e) => {
             error!("Error when executing tx! {:#?}", e);
@@ -127,7 +127,7 @@ fn evm_call() {
     info!("-- GET VALUE TX (EVM CONTRACT) ---------------------------");
     info!("----------------------------------------------------------");
     debug!("Tx Calldata:\n> {:#?}", Bytes::from(selector_get.to_vec()));
-    match run_tx(&mut db, &evm, selector_get.to_vec()) {
+    match run_tx(&mut db, &evm, selector_get.to_vec(), &alice) {
         Ok(res) => {
             assert_eq!(
                 U256::from_be_bytes::<32>(res.output.as_slice().try_into().unwrap()),
@@ -161,7 +161,7 @@ fn evm_call() {
         "Tx calldata:\n> {:#?}",
         Bytes::from(complete_calldata_raw_call.clone())
     );
-    match run_tx(&mut db, &evm, complete_calldata_raw_call.clone()) {
+    match run_tx(&mut db, &evm, complete_calldata_raw_call.clone(), &alice) {
         Ok(res) => {
             assert_eq!(
                 U256::from_be_bytes::<32>(res.output.as_slice()[..32].try_into().unwrap()),
@@ -179,7 +179,7 @@ fn evm_call() {
     info!("-- GET VALUE TX (EVM CONTRACT) ---------------------------");
     info!("----------------------------------------------------------");
     debug!("Tx Calldata:\n> {:#?}", Bytes::from(selector_get.to_vec()));
-    match run_tx(&mut db, &evm, selector_get.to_vec()) {
+    match run_tx(&mut db, &evm, selector_get.to_vec(), &alice) {
         Ok(res) => {
             assert_eq!(
                 U256::from_be_bytes::<32>(res.output.as_slice().try_into().unwrap()),

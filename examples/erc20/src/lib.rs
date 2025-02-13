@@ -26,8 +26,9 @@ pub struct ERC20 {
 #[show_streams]
 pub enum ERC20Error {
     OnlyOwner,
-    InsufficientFunds(U256, U256),
-    InsufficientAllowance(U256, U256)
+    ZeroAmount,
+    InsufficientBalance(U256),
+    InsufficientAllowance(U256)
 }
 
 #[derive(Event)]
@@ -36,7 +37,7 @@ pub struct Transfer {
     pub from: Address,
     #[indexed]
     pub to: Address,
-    pub value: U256,
+    pub amount: U256,
 }
 
 #[derive(Event)]
@@ -45,7 +46,7 @@ pub struct Mint {
     pub from: Address,
     #[indexed]
     pub to: Address,
-    pub value: U256,
+    pub amount: U256,
 }
 
 #[contract]
@@ -64,58 +65,55 @@ impl ERC20 {
 
     // -- STATE MODIFYING FUNCTIONS -------------------------------------------
     #[payable]
-    pub fn mint(&mut self, to: Address, value: U256) -> Result<(), ERC20Error> {
+    pub fn mint(&mut self, to: Address, amount: U256) -> Result<bool, ERC20Error> {
         if msg_sender() != self.owner.read() { return Err(ERC20Error::OnlyOwner) }; 
-        // self.check_only_owner()?;
+        if amount == U256::ZERO { return Err(ERC20Error::ZeroAmount) };
 
         // increase user balance
         let to_balance = self.balances.read(to);
-        self.balances.write(to, to_balance + value);
+        self.balances.write(to, to_balance + amount);
         log::emit(Transfer::new(
             address!("0000000000000000000000000000000000000000"),
             to,
-            value,
+            amount,
         ));
 
         // increase total supply
-        self.total_supply += value;
+        self.total_supply += amount;
         
-        Ok(())
+        Ok(true)
     }
 
-    pub fn approve(&mut self, spender: Address, value: U256) -> bool {
+    pub fn approve(&mut self, spender: Address, amount: U256) -> bool {
         let mut spender_allowances = self.allowances.read(msg_sender());
-        spender_allowances.write(spender, value);
+        spender_allowances.write(spender, amount);
         true
     }
 
-    pub fn transfer(&mut self, to: Address, value: U256) -> bool {
+    pub fn transfer(&mut self, to: Address, amount: U256) -> Result<bool, ERC20Error> {
+        if amount == U256::ZERO { return Err(ERC20Error::ZeroAmount) };
+
         let from = msg_sender();
         let from_balance = self.balances.read(from);
         let to_balance = self.balances.read(to);
 
-        if from == to || from_balance < value {
-            revert();
-        }
+        if from_balance < amount { return Err(ERC20Error::InsufficientBalance(from_balance)) }
 
-        self.balances.write(from, from_balance - value);
-        self.balances.write(to, to_balance + value);
+        self.balances.write(from, from_balance - amount);
+        self.balances.write(to, to_balance + amount);
 
-        log::emit(Transfer::new(from, to, value));
-        true
+        log::emit(Transfer::new(from, to, amount));
+        Ok(true)
     }
 
-    pub fn transfer_from(
-        &mut self,
-        sender: Address,
-        recipient: Address,
-        amount: U256
-    ) -> Result<(), ERC20Error> {
+    pub fn transfer_from(&mut self, sender: Address, recipient: Address, amount: U256) -> Result<bool, ERC20Error> {
+        if amount == U256::ZERO { return Err(ERC20Error::ZeroAmount) };
+
         let allowance = self.allowances.read(sender).read(msg_sender());
-        if allowance < amount { return Err(ERC20Error::InsufficientAllowance(allowance, amount)) };
+        if allowance < amount { return Err(ERC20Error::InsufficientAllowance(allowance)) };
 
         let sender_balance = self.balances.read(sender);
-        if allowance < amount { return Err(ERC20Error::InsufficientFunds(sender_balance, amount)) };
+        if allowance < amount { return Err(ERC20Error::InsufficientBalance(sender_balance)) };
 
         self.allowances
             .read(sender)
@@ -123,15 +121,14 @@ impl ERC20 {
         self.balances.write(sender, sender_balance - amount);
         self.balances.write(recipient, self.balances.read(recipient) + amount);
 
-        Ok(())
+        Ok(true)
     }
 
-    fn transfer_ownership(&mut self, new_owner: Address) -> Result<(), ERC20Error> {
+    pub fn transfer_ownership(&mut self, new_owner: Address) -> Result<bool, ERC20Error> {
        if msg_sender() != self.owner.read() { return Err(ERC20Error::OnlyOwner) }; 
-        // self.check_only_owner()?;
-        self.owner().write(owner);
+        self.owner.write(new_owner);
 
-        Ok(())
+        Ok(true)
     }
 
     // -- READ-ONLY FUNCTIONS --------------------------------------------------

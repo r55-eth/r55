@@ -82,11 +82,11 @@ pub fn deploy_contract(
     }
 }
 
-pub fn run_tx(db: &mut InMemoryDB, addr: &Address, calldata: Vec<u8>) -> Result<TxResult> {
+pub fn run_tx(db: &mut InMemoryDB, addr: &Address, calldata: Vec<u8>, caller: &Address) -> Result<TxResult> {
     let mut evm = Evm::builder()
         .with_db(db)
         .modify_tx_env(|tx| {
-            tx.caller = address!("000000000000000000000000000000000000000A");
+            tx.caller = *caller;
             tx.transact_to = TransactTo::Call(*addr);
             tx.data = calldata.into();
             tx.value = U256::from(0);
@@ -355,7 +355,13 @@ fn execute_riscv(
                         let dest_offset = emu.cpu.xregs.read(10);
                         let offset = emu.cpu.xregs.read(11) as usize;
                         let size = emu.cpu.xregs.read(12) as usize;
-                        let data = &interpreter.return_data_buffer.as_ref()[offset..size];
+                        debug!(
+                            "> RETURNDATACOPY [memory_offset: {}, offset: {}, size: {}]",
+                            dest_offset,
+                            offset,
+                            size,
+                        );
+                        let data = &interpreter.return_data_buffer.as_ref()[offset..offset+size];
                         debug!(
                             "> RETURNDATACOPY [memory_offset: {}, offset: {}, size: {}]\n{}",
                             dest_offset,

@@ -5,6 +5,7 @@ use alloc::vec::Vec;
 use alloy_core::primitives::{Address, Bytes, U256};
 use eth_riscv_syscalls::Syscall;
 use core::arch::asm;
+use core::cmp;
 use core::marker::PhantomData;
 
 // Concrete types implementing the context traits
@@ -87,16 +88,19 @@ pub fn call_contract(addr: Address, value: u64, data: &[u8], ret_size: Option<u6
     ret_data.resize(ret_size as usize, 0);
 
     // Copy the return data from the interpreter's buffer
-    let (offset, chuncks, chunk_size) = if ret_size < 32 {
-        (ret_data.as_ptr() as u64, 1_u64, ret_size)
-    } else {
-        (ret_data.as_ptr() as u64, ret_size / 32, 32)
-    };
+    let (offset, chuncks, remainder) = (ret_data.as_ptr() as u64, ret_size / 32, ret_size % 32);
 
+    // handle full chunks
     for i in 0..chuncks {
         let step = i * 32;
-        return_data_copy(offset + step, step, chunk_size)
-    }; 
+        return_data_copy(offset + step, step, 32);
+    };
+
+    // handle potential last partial-chunk
+    if remainder != 0 {
+        let step = chuncks * 32;
+        return_data_copy(offset + step, step, remainder);
+    };
 
     Bytes::from(ret_data)
 }
@@ -128,17 +132,21 @@ pub fn staticcall_contract(addr: Address, value: u64, data: &[u8], ret_size: Opt
     let mut ret_data = Vec::with_capacity(ret_size as usize);
     ret_data.resize(ret_size as usize, 0);
 
-    // Copy the return data from the interpreter's buffer
-    let (offset, chuncks, chunk_size) = if ret_size < 32 {
-        (ret_data.as_ptr() as u64, 1_u64, ret_size)
-    } else {
-        (ret_data.as_ptr() as u64, ret_size / 32, 32)
-    };
 
+    // Copy the return data from the interpreter's buffer
+    let (offset, chuncks, remainder) = (ret_data.as_ptr() as u64, ret_size / 32, ret_size % 32);
+
+    // handle full chunks
     for i in 0..chuncks {
         let step = i * 32;
-        return_data_copy(offset + step, step, chunk_size)
-    }; 
+        return_data_copy(offset + step, step, 32);
+    };
+
+    // handle potential last partial-chunk
+    if remainder != 0 {
+        let step = chuncks * 32;
+        return_data_copy(offset + step, step, remainder);
+    };
 
     Bytes::from(ret_data)
 }
