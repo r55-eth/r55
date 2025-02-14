@@ -355,12 +355,6 @@ fn execute_riscv(
                         let dest_offset = emu.cpu.xregs.read(10);
                         let offset = emu.cpu.xregs.read(11) as usize;
                         let size = emu.cpu.xregs.read(12) as usize;
-                        debug!(
-                            "> RETURNDATACOPY [memory_offset: {}, offset: {}, size: {}]",
-                            dest_offset,
-                            offset,
-                            size,
-                        );
                         let data = &interpreter.return_data_buffer.as_ref()[offset..offset+size];
                         debug!(
                             "> RETURNDATACOPY [memory_offset: {}, offset: {}, size: {}]\n{}",
@@ -376,7 +370,6 @@ fn execute_riscv(
                             .bus
                             .get_dram_slice(dest_offset..(dest_offset + size as u64))?;
                         return_memory.copy_from_slice(data);
-                        debug!("returndata copied!")
                     }
                     Syscall::Call => return execute_call(emu, interpreter, host, false),
                     Syscall::StaticCall => return execute_call(emu, interpreter, host, true),
