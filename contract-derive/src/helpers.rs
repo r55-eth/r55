@@ -50,7 +50,7 @@ impl<'a> MethodInfo<'a> {
 fn get_arg_props<'a>(
     skip_first_arg: bool,
     method: &'a MethodInfo<'a>,
-) -> (Vec<Ident>, Vec<&syn::Type>) {
+) -> (Vec<Ident>, Vec<&'a syn::Type>) {
     method
         .args
         .iter()
@@ -66,11 +66,11 @@ fn get_arg_props<'a>(
         .unzip()
 }
 
-pub fn get_arg_props_skip_first<'a>(method: &'a MethodInfo<'a>) -> (Vec<Ident>, Vec<&syn::Type>) {
+pub fn get_arg_props_skip_first<'a>(method: &'a MethodInfo<'a>) -> (Vec<Ident>, Vec<&'a syn::Type>) {
     get_arg_props(true, method)
 }
 
-pub fn get_arg_props_all<'a>(method: &'a MethodInfo<'a>) -> (Vec<Ident>, Vec<&syn::Type>) {
+pub fn get_arg_props_all<'a>(method: &'a MethodInfo<'a>) -> (Vec<Ident>, Vec<&'a syn::Type>) {
     get_arg_props(false, method)
 }
 
@@ -295,9 +295,9 @@ fn generate_method_impl(
     };
 
     // Generate different implementations based on return type
-    match extract_result_types(&method.return_type) {
+    match extract_wrapper_types(&method.return_type) {
         // If `Result<T, E>` handle each individual type
-        Some((ok_type, err_type)) => quote! {
+        WrapperType::Result(ok_type, err_type) => quote! {
             pub fn #name(#self_param, #(#arg_names: #arg_types),*) -> Result<#ok_type, #err_type>  {
                 use alloy_sol_types::SolValue;
                 use alloc::vec::Vec;
@@ -317,14 +317,10 @@ fn generate_method_impl(
                 }
             }
         },
-        // Otherwise, simply abi_decode the value
-        None => {
-            let return_ty = match return_type {
-                ReturnType::Default => quote! { () },
-                ReturnType::Type(_, ty) => quote! { #ty },
-            };
-            quote! {
-                pub fn #name(#self_param, #(#arg_names: #arg_types),*) -> #return_ty {
+        // If `Option<T>` unwrap the type to decode, and wrap it back
+        WrapperType::Option(return_ty) => {
+                quote! {
+                pub fn #name(#self_param, #(#arg_names: #arg_types),*) -> Option<#return_ty> {
                     use alloy_sol_types::SolValue;
                     use alloc::vec::Vec;
 
@@ -337,51 +333,103 @@ fn generate_method_impl(
                         None
                     );
 
-                    <#return_ty>::abi_decode(&result, true).expect("Unable to decode")
+                    Some(<#return_ty>::abi_decode(&result, true).expect("Unable to decode"))
+                }
+            }
+        },
+        // Otherwise, simply decode the value + wrap it in an `Option` to force error-handling
+        WrapperType::None => {
+            let return_ty = match return_type {
+                ReturnType::Default => quote! { () },
+                ReturnType::Type(_, ty) => quote! { #ty },
+            };
+            quote! {
+                pub fn #name(#self_param, #(#arg_names: #arg_types),*) -> Option<#return_ty> {
+                    use alloy_sol_types::SolValue;
+                    use alloc::vec::Vec;
+
+                    #calldata
+
+                    let result = #call_fn(
+                        self.address,
+                        0_u64,
+                        &complete_calldata,
+                        None
+                    );
+
+                    Some(<#return_ty>::abi_decode(&result, true).expect("Unable to decode"))
                 }
             }
         }
     }
 }
 
-// Helper function to extract Result types if present
-fn extract_result_types(return_type: &ReturnType) -> Option<(TokenStream, TokenStream)> {
+pub enum WrapperType {
+    Result(TokenStream, TokenStream),
+    Option(TokenStream),
+    None
+}
+
+// Helper function to extract Result or Option types if present
+pub fn extract_wrapper_types(return_type: &ReturnType) -> WrapperType {
     let type_path = match return_type {
-        ReturnType::Default => return None,
+        ReturnType::Default => return WrapperType::None,
         ReturnType::Type(_, ty) => match ty.as_ref() {
             Type::Path(type_path) => type_path,
-            _ => return None,
+            _ => return WrapperType::None,
         },
     };
 
-    let last_segment = type_path.path.segments.last()?;
-    if last_segment.ident != "Result" {
-        return None;
+    let last_segment = match type_path.path.segments.last() {
+        Some(segment) => segment,
+        None => return WrapperType::None,
+    };
+
+    match last_segment.ident.to_string().as_str() {
+        "Result" => {
+            let PathArguments::AngleBracketed(args) = &last_segment.arguments else {
+                return WrapperType::None;
+            };
+
+            let type_args: Vec<_> = args.args.iter().collect();
+            if type_args.len() != 2 {
+                return WrapperType::None;
+            }
+
+            // Convert the generic arguments to TokenStreams directly
+            let ok_type = match &type_args[0] {
+                syn::GenericArgument::Type(t) => quote!(#t),
+                _ => return WrapperType::None,
+            };
+
+            let err_type = match &type_args[1] {
+                syn::GenericArgument::Type(t) => quote!(#t),
+                _ => return WrapperType::None,
+            };
+
+            WrapperType::Result(ok_type, err_type)
+        },
+        "Option" => {
+            let PathArguments::AngleBracketed(args) = &last_segment.arguments else {
+                return WrapperType::None;
+            };
+
+            let type_args: Vec<_> = args.args.iter().collect();
+            if type_args.len() != 1 {
+                return WrapperType::None;
+            }
+
+            // Convert the generic argument to TokenStream
+            let inner_type = match &type_args[0] {
+                syn::GenericArgument::Type(t) => quote!(#t),
+                _ => return WrapperType::None,
+            };
+
+            WrapperType::Option(inner_type)
+        },
+        _ => WrapperType::None,
     }
-
-    let PathArguments::AngleBracketed(args) = &last_segment.arguments else {
-        return None;
-    };
-
-    let type_args: Vec<_> = args.args.iter().collect();
-    if type_args.len() != 2 {
-        return None;
-    }
-
-    // Convert the generic arguments to TokenStreams directly
-    let ok_type = match &type_args[0] {
-        syn::GenericArgument::Type(t) => quote!(#t),
-        _ => return None,
-    };
-
-    let err_type = match &type_args[1] {
-        syn::GenericArgument::Type(t) => quote!(#t),
-        _ => return None,
-    };
-
-    Some((ok_type, err_type))
 }
-
 
 // Helper function to generate fn selector for r55 contracts
 pub fn generate_selector_r55(
@@ -549,43 +597,6 @@ fn to_camel_case(s: String) -> String {
     }
 
     result
-}
-
-pub fn validate_return_type(return_type: &syn::Type) -> bool {
-    let path = match return_type {
-        syn::Type::Path(path) => path,
-        _ => return false
-    };
-
-    // Get Result segment
-    let result_segment = match path.path.segments.first() {
-        Some(seg) if seg.ident == "Result" => seg,
-        _ => return false
-    };
-
-    // Get generic arguments
-    let args = match &result_segment.arguments {
-        syn::PathArguments::AngleBracketed(args) => args,
-        _ => panic!("Result must have generic parameters")
-    };
-
-    // Get error type
-    let error_path = match args.args.iter().nth(1) {
-        Some(syn::GenericArgument::Type(syn::Type::Path(path))) => path,
-        _ => panic!("Result type must have a valid error type parameter")
-    };
-
-    // Validate error type
-    let error_segment = error_path.path.segments.last()
-        .expect("Invalid error type path");
-
-    // Validate error naming convention
-    if !error_segment.ident.to_string().ends_with("Error") {
-        panic!("Error type must end with 'Error'");
-    }
-
-    // Ensure it's a simple enum
-    matches!(&error_segment.arguments, syn::PathArguments::None)
 }
 
 // Helper function to generate the deployment code

@@ -15,8 +15,8 @@ pub struct ERC20x;
 
 #[contract]
 impl ERC20x {
-    pub fn x_balance_of(&self, owner: Address, token_addr: Address) -> U256 {
-        let token = IERC20::new(token_addr).with_ctx(self);
+    pub fn x_balance_of(&self, owner: Address, token_addr: Address) -> Option<U256> {
+        let token = IERC20::new(token_addr).with_ctx(self);         // IERC20<ReadOnly>
         token.balance_of(owner)
     }
 
@@ -39,7 +39,7 @@ impl ERC20x {
         let mut token = IERC20::new(token_addr).with_ctx(self);     // IERC20<ReadWrite>
         let to = msg_sender();
 
-        // easily leverage rust's `Result<T, E>` enum
+        // easily leverage rust's `Result<T, E>` enum to deal with call reverts
         match token.transfer_from(from, to, amount) {
             Err(ERC20Error::InsufficientBalance(max)) => token.transfer_from(from, to, max),
             Err(ERC20Error::InsufficientAllowance(max)) => token.transfer_from(from, to, max),

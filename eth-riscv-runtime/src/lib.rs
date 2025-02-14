@@ -11,8 +11,8 @@ pub mod block;
 pub mod types;
 pub mod tx;
 
-pub mod err;
-pub use err::{revert, revert_with_error, Error};
+pub mod error;
+pub use error::{revert, revert_with_error, Error};
 
 pub mod log;
 pub use log::{emit_log, Event};

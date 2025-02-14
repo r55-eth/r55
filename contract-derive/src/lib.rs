@@ -11,7 +11,7 @@ use syn::{
 mod helpers;
 use crate::helpers::{InterfaceArgs, InterfaceCompilationTarget, MethodInfo};
 
-#[proc_macro_derive(CustomError)]
+#[proc_macro_derive(Error)]
 pub fn error_derive(input: TokenStream) -> TokenStream {
     let input = parse_macro_input!(input as DeriveInput);
     let name = &input.ident;
@@ -125,7 +125,7 @@ pub fn error_derive(input: TokenStream) -> TokenStream {
 
     let expanded = quote! {
         #[show_streams]
-        impl eth_riscv_runtime::err::Error for #name {
+        impl eth_riscv_runtime::error::Error for #name {
             fn abi_encode(&self) -> alloc::vec::Vec<u8> {
                 use alloy_core::primitives::keccak256;
                 use alloc::vec::Vec;
@@ -288,9 +288,9 @@ pub fn contract(_attr: TokenStream, item: TokenStream) -> TokenStream {
                 // No return value
                 quote! { self.#method_name(#( #arg_names ),*); }
             }
-           ReturnType::Type(_, return_type) => {
-                if helpers::validate_return_type(return_type.as_ref()) {
-                    quote! {
+           ReturnType::Type(_,_) => {
+                match helpers::extract_wrapper_types(&method.sig.output) {
+                    helpers::WrapperType::Result(_,_) => quote! {
                         match self.#method_name(#( #arg_names ),*) {
                             Ok(success) => {
                                 let result_bytes = success.abi_encode();
@@ -302,9 +302,19 @@ pub fn contract(_attr: TokenStream, item: TokenStream) -> TokenStream {
                                 eth_riscv_runtime::revert_with_error(&err.abi_encode());
                             }
                         }
-                    }
-                } else {
-                    quote! {
+                    },
+                    helpers::WrapperType::Option(_) => quote! {
+                        match self.#method_name(#( #arg_names ),*) {
+                            Some(success) => {
+                                let result_bytes = success.abi_encode();
+                                let result_size = result_bytes.len() as u64;
+                                let result_ptr = result_bytes.as_ptr() as u64;
+                                eth_riscv_runtime::return_riscv(result_ptr, result_size);
+                            },
+                            None => eth_riscv_runtime::revert(),
+                        }
+                    },
+                    helpers::WrapperType::None => quote! {
                         let result = self.#method_name(#( #arg_names ),*);
                         let result_bytes = result.abi_encode();
                         let result_size = result_bytes.len() as u64;
