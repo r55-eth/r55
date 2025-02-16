@@ -26,19 +26,14 @@ where
     DB::Error: std::error::Error + 'static,
 {
     /// The exception kind on RISC-V emulator
-    #[error("Got RISC-V emulator exception: {0:?}")]
     RvEmuException(Exception),
     /// EVM error
-    #[error(transparent)]
     EvmError(#[from] EVMError<DB::Error>),
     /// Error returned when a conversion from a slice to an array fails
-    #[error(transparent)]
     TryFromSliceError(#[from] std::array::TryFromSliceError),
     /// Unhandled syscall error
-    #[error("Syscall error: {0}")]
     SyscallError(eth_riscv_syscalls::Error),
     /// Unexpected result of the transaction execution error
-    #[error("Unexpected result of the transaction execution : {0:?}")]
     UnexpectedExecResult(ExecutionResult),
 }
 
@@ -77,5 +72,33 @@ impl fmt::Display for TxResult {
             revm::primitives::Bytes::from(self.output.clone()),
             self.logs,
         )
+    }
+}
+
+impl<DB: Database> fmt::Display for Error<DB>
+where
+    DB::Error: std::error::Error + 'static,
+{
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::UnexpectedExecResult(ExecutionResult::Revert { gas_used, output }) => {
+                write!(
+                    f,
+                    "Unexpected result of the transaction execution:\n REVERT:\n > output [hex]: {}\n > output [str]: {}\n > gas used: {}",
+                    output,
+                    String::from_utf8(output.to_vec()).unwrap_or_default(),
+                    gas_used
+                )
+            }
+            Self::RvEmuException(e) => write!(f, "Got RISC-V emulator exception: {:?}", e),
+            Self::EvmError(e) => write!(f, "{}", e),
+            Self::TryFromSliceError(e) => write!(f, "{}", e),
+            Self::SyscallError(e) => write!(f, "Syscall error: {}", e),
+            Self::UnexpectedExecResult(other) => write!(
+                f,
+                "Unexpected result of the transaction execution: {:?}",
+                other
+            ),
+        }
     }
 }

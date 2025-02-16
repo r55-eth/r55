@@ -4,8 +4,8 @@ use alloy_sol_types::SolValue;
 use proc_macro::TokenStream;
 use quote::{format_ident, quote};
 use syn::{
-    parse_macro_input, Data, DeriveInput, Fields, ImplItem, ImplItemMethod,
-    ItemImpl, ItemTrait, ReturnType, TraitItem,
+    parse_macro_input, Data, DeriveInput, Fields, ImplItem, ImplItemMethod, ItemImpl, ItemTrait,
+    ReturnType, TraitItem,
 };
 
 mod helpers;
@@ -22,28 +22,28 @@ pub fn error_derive(input: TokenStream) -> TokenStream {
         panic!("`Error` must be an enum");
     };
 
-    // Generate error encodding for each variant
+    // Generate error encoding for each variant
     let encode_arms = variants.iter().map(|variant| {
         let variant_name = &variant.ident;
-        
+
         let signature = match &variant.fields {
             Fields::Unit => {
                 format!("{}::{}", name, variant_name)
-            },
+            }
             Fields::Unnamed(fields) => {
-                let type_names: Vec<_> = fields.unnamed.iter()
-                    .map(|f| helpers::rust_type_to_sol_type(&f.ty)
-                        .expect("Unknown type")
-                        .sol_type_name()
-                        .into_owned()
-                    ).collect();
-                
-                format!("{}::{}({})",
-                    name,
-                    variant_name,
-                    type_names.join(",")
-                )
-            },
+                let type_names: Vec<_> = fields
+                    .unnamed
+                    .iter()
+                    .map(|f| {
+                        helpers::rust_type_to_sol_type(&f.ty)
+                            .expect("Unknown type")
+                            .sol_type_name()
+                            .into_owned()
+                    })
+                    .collect();
+
+                format!("{}::{}({})", name, variant_name, type_names.join(","))
+            }
             Fields::Named(_) => panic!("Named fields are not supported"),
         };
 
@@ -54,7 +54,7 @@ pub fn error_derive(input: TokenStream) -> TokenStream {
                     .map(|i| format_ident!("_{}", i))
                     .collect();
                 quote! { #name::#variant_name(#(#vars),*) }
-            },
+            }
             Fields::Named(_) => panic!("Named fields are not supported"),
         };
 
@@ -62,10 +62,9 @@ pub fn error_derive(input: TokenStream) -> TokenStream {
         let data = match &variant.fields {
             Fields::Unit => quote! {},
             Fields::Unnamed(fields) => {
-                let vars = (0..fields.unnamed.len())
-                    .map(|i| format_ident!("_{}", i));
+                let vars = (0..fields.unnamed.len()).map(|i| format_ident!("_{}", i));
                 quote! { #( res.extend_from_slice(&#vars.abi_encode()); )* }
-            },
+            }
             Fields::Named(_) => panic!("Named fields are not supported"),
         };
 
@@ -80,8 +79,7 @@ pub fn error_derive(input: TokenStream) -> TokenStream {
         }
     });
 
-
-    // Generate error encodding for each variant
+    // Generate error decoding for each variant
     let decode_arms = variants.iter().map(|variant| {
         let variant_name = &variant.ident;
         
@@ -123,6 +121,30 @@ pub fn error_derive(input: TokenStream) -> TokenStream {
         }
     });
 
+    // Generate `Debug` implementation for each variant
+    let debug_arms = variants.iter().map(|variant| {
+        let variant_name = &variant.ident;
+
+        match &variant.fields {
+            Fields::Unit => quote! {
+                #name::#variant_name => { f.write_str(stringify!(#variant_name)) }
+            },
+            Fields::Unnamed(fields) => {
+                let vars: Vec<_> = (0..fields.unnamed.len())
+                    .map(|i| format_ident!("_{}", i))
+                    .collect();
+                quote! {
+                    #name::#variant_name(#(#vars),*) => {
+                        f.debug_tuple(stringify!(#variant_name))
+                            #(.field(#vars))*
+                            .finish()
+                    }
+                }
+            }
+            Fields::Named(_) => panic!("Named fields are not supported"),
+        }
+    });
+
     let expanded = quote! {
         impl eth_riscv_runtime::error::Error for #name {
             fn abi_encode(&self) -> alloc::vec::Vec<u8> {
@@ -137,14 +159,20 @@ pub fn error_derive(input: TokenStream) -> TokenStream {
                 use alloy_sol_types::SolValue;
                 use alloc::vec::Vec;
 
-                if bytes.len() < 4 { eth_riscv_runtime::revert() };
+                if bytes.len() < 4 { panic!("Invalid error length") };
                 let selector = &bytes[..4];
                 let data = if bytes.len() > 4 { Some(&bytes[4..]) } else { None };
 
                 match selector {
                     #(#decode_arms),*,
-                    _ => eth_riscv_runtime::revert()
+                    _ => panic!("Unknown error")
                 }
+            }
+        }
+
+        impl core::fmt::Debug for #name {
+            fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+                match self { #(#debug_arms),* }
             }
         }
     };
@@ -275,7 +303,7 @@ pub fn contract(_attr: TokenStream, item: TokenStream) -> TokenStream {
 
         // Check if there are payable methods
         let checks = if !is_payable(&method) {
-            quote! { if eth_riscv_runtime::msg_value() > U256::from(0) { revert(); } }
+            quote! { if eth_riscv_runtime::msg_value() > U256::from(0) { panic!("Non-payable function"); } }
         } else {
             quote! {}
         };
@@ -289,7 +317,8 @@ pub fn contract(_attr: TokenStream, item: TokenStream) -> TokenStream {
            ReturnType::Type(_,_) => {
                 match helpers::extract_wrapper_types(&method.sig.output) {
                     helpers::WrapperType::Result(_,_) => quote! {
-                        match self.#method_name(#( #arg_names ),*) {
+                        let res = self.#method_name(#( #arg_names ),*);
+                        match res {
                             Ok(success) => {
                                 let result_bytes = success.abi_encode();
                                 let result_size = result_bytes.len() as u64;
@@ -325,7 +354,7 @@ pub fn contract(_attr: TokenStream, item: TokenStream) -> TokenStream {
 
         quote! {
             #method_selector => {
-                let (#( #arg_names ),*) = <(#( #arg_types ),*)>::abi_decode(calldata, true).unwrap();
+                let (#( #arg_names ),*) = <(#( #arg_types ),*)>::abi_decode(calldata, true).expect("abi decode failed");
                 #checks
                 #return_handling
             }
@@ -385,11 +414,7 @@ pub fn contract(_attr: TokenStream, item: TokenStream) -> TokenStream {
 
     // Generate the interface
     let interface_name = format_ident!("I{}", struct_name);
-    let interface = helpers::generate_interface(
-        &public_methods,
-        &interface_name,
-        None,
-    );
+    let interface = helpers::generate_interface(&public_methods, &interface_name, None);
 
     // Generate initcode for deployments
     let deployment_code = helpers::generate_deployment_code(struct_name, constructor);
@@ -440,7 +465,7 @@ pub fn contract(_attr: TokenStream, item: TokenStream) -> TokenStream {
 
                     match selector {
                         #( #match_arms )*
-                        _ => revert(),
+                        _ => panic!("unknown method"),
                     }
 
                     return_riscv(0, 0);

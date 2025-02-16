@@ -4,7 +4,7 @@
 use core::default::Default;
 
 use alloy_core::primitives::{Address, U256};
-use contract_derive::contract;
+use contract_derive::{contract, show_streams};
 
 extern crate alloc;
 
@@ -45,5 +45,12 @@ impl ERC20x {
             Err(ERC20Error::InsufficientAllowance(max)) => token.transfer_from(from, to, max),
             other => other
         }
+    }
+
+    pub fn panics(&self) { panic!("This function always panics"); }
+
+    pub fn x_mint_panics(&mut self, to: Address, amount: U256, token_addr: Address) -> bool {
+        let mut token = IERC20::new(token_addr).with_ctx(self);     // IERC20<ReadWrite>
+        token.mint(to, amount).expect("ERC20::mint() failed!")
     }
 }

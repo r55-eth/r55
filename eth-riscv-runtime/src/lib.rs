@@ -3,8 +3,9 @@
 #![feature(alloc_error_handler, maybe_uninit_write_slice, round_char_boundary)]
 
 use alloy_core::primitives::{Address, U256};
-use core::{arch::asm, panic::PanicInfo, slice};
+use core::{arch::asm, panic::PanicInfo, slice, fmt::Write};
 pub use riscv_rt::entry;
+extern crate alloc as ext_alloc;
 
 mod alloc;
 pub mod block;
@@ -27,20 +28,14 @@ pub unsafe fn slice_from_raw_parts(address: usize, length: usize) -> &'static [u
 }
 
 #[panic_handler]
-unsafe fn panic(_panic: &PanicInfo<'_>) -> ! {
-    static mut IS_PANICKING: bool = false;
+unsafe fn panic(info: &PanicInfo<'_>) -> ! {
+    // Capture the panic info msg
+    let mut message = ext_alloc::string::String::new();
+    let _ = write!(message, "{:?}", info.message());    
 
-    if !IS_PANICKING {
-        IS_PANICKING = true;
-
-        revert();
-        // TODO with string
-        //print!("{panic}\n");
-    } else {
-        revert();
-        // TODO with string
-        //print_str("Panic handler has panicked! Things are very dire indeed...\n");
-    }
+    // Convert to bytes and revert
+    let msg = message.into_bytes();
+    revert_with_error(&msg);
 }
 
 use eth_riscv_syscalls::Syscall;
@@ -132,11 +127,11 @@ pub fn msg_data() -> &'static [u8] {
 #[allow(non_snake_case)]
 #[no_mangle]
 fn DefaultHandler() {
-    revert();
+   panic!("default handler");
 }
 
 #[allow(non_snake_case)]
 #[no_mangle]
 fn ExceptionHandler(_trap_frame: &riscv_rt::TrapFrame) -> ! {
-    revert();
+    panic!("exception nhandler");
 }

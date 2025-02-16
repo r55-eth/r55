@@ -552,7 +552,6 @@ mod tests {
 
     #[test]
     fn test_custom_error_handling_in_contract_calls() {
-        use tracing::info;
         initialize_logger();
 
         let mut db = InMemoryDB::default();
@@ -664,5 +663,60 @@ mod tests {
             value_approve,
             "Incorrect balance"
         );
+    }
+
+    #[test]
+    fn test_string_error_handling_in_contract_calls() {
+        initialize_logger();
+
+        let mut db = InMemoryDB::default();
+
+        // Setup addresses
+        let alice: Address = address!("000000000000000000000000000000000000000A");
+
+        // Add balance to everyone's account for gas fees
+        add_balance_to_db(&mut db, alice, 1e18 as u64);
+
+        // Compile + deploy contract
+        let constructor = alice.abi_encode();
+        let bytecode = compile_with_prefix(compile_deploy, ERC20_PATH).unwrap();
+        let erc20 = deploy_contract(&mut db, bytecode, Some(constructor)).unwrap();
+
+        let bytecode_x = compile_with_prefix(compile_deploy, ERC20X_PATH).unwrap();
+        let erc20x = deploy_contract(&mut db, bytecode_x, None).unwrap();
+
+        // Define fn selectors
+        let selector_panic = get_selector_from_sig("panics()");
+        let selector_x_mint_panic = get_selector_from_sig("x_mint_panics(address,uint256,address)");
+
+        // Attempt a call that panics with a string msg
+        let panic_result =
+            run_tx(&mut db, &erc20x, selector_panic.to_vec(), &alice).expect_err("Tx succeeded");
+        if let Error::UnexpectedExecResult(ExecutionResult::Revert { gas_used, output }) =
+            panic_result
+        {
+            assert_eq!(
+                output,
+                Bytes::from("This function always panics"),
+                "Incorrect error"
+            );
+        };
+
+        // Attempt a call that panics with a string msg
+        let mut calldata_x_mint = (alice, U256::from(1e18), erc20).abi_encode();
+        let mut complete_x_mint_calldata = selector_x_mint_panic.to_vec();
+        complete_x_mint_calldata.append(&mut calldata_x_mint);
+        let x_mint_panic_result =
+            run_tx(&mut db, &erc20x, complete_x_mint_calldata.to_vec(), &alice)
+                .expect_err("Tx succeeded");
+        if let Error::UnexpectedExecResult(ExecutionResult::Revert { gas_used, output }) =
+            x_mint_panic_result
+        {
+            assert_eq!(
+                output,
+                Bytes::from("ERC20::mint() failed!: OnlyOwner"),
+                "Incorrect error"
+            );
+        };
     }
 }

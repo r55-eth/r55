@@ -3,7 +3,8 @@ use alloy_dyn_abi::DynSolType;
 use proc_macro2::TokenStream;
 use quote::{format_ident, quote};
 use syn::{
-    parse::{Parse, ParseStream}, FnArg, Ident, ImplItemMethod, LitStr, ReturnType, TraitItemMethod, Type, PathArguments
+    parse::{Parse, ParseStream},
+    FnArg, Ident, ImplItemMethod, LitStr, PathArguments, ReturnType, TraitItemMethod, Type,
 };
 
 // Unified method info from `ImplItemMethod` and `TraitItemMethod`
@@ -64,7 +65,9 @@ fn get_arg_props<'a>(
         .unzip()
 }
 
-pub fn get_arg_props_skip_first<'a>(method: &'a MethodInfo<'a>) -> (Vec<Ident>, Vec<&'a syn::Type>) {
+pub fn get_arg_props_skip_first<'a>(
+    method: &'a MethodInfo<'a>,
+) -> (Vec<Ident>, Vec<&'a syn::Type>) {
     get_arg_props(true, method)
 }
 
@@ -92,16 +95,23 @@ impl Parse for InterfaceArgs {
 
             match value.as_str() {
                 "camelCase" => Some(InterfaceNamingStyle::CamelCase),
-                invalid => return Err(syn::Error::new(
-                    input.span(),
-                    format!("unsupported style: {}. Only 'camelCase' is supported", invalid)
-                ))
+                invalid => {
+                    return Err(syn::Error::new(
+                        input.span(),
+                        format!(
+                            "unsupported style: {}. Only 'camelCase' is supported",
+                            invalid
+                        ),
+                    ))
+                }
             }
         } else {
             None
         };
 
-        Ok(InterfaceArgs { rename: rename_style })
+        Ok(InterfaceArgs {
+            rename: rename_style,
+        })
     }
 }
 
@@ -181,7 +191,7 @@ fn generate_method_impl(
     let name = method.name;
     let return_type = method.return_type;
     let method_selector = u32::from_be_bytes(
-        generate_fn_selector(method, interface_style).expect("Unable to generate fn selector")
+        generate_fn_selector(method, interface_style).expect("Unable to generate fn selector"),
     );
 
     let (arg_names, arg_types) = get_arg_props_skip_first(method);
@@ -247,7 +257,7 @@ fn generate_method_impl(
         },
         // If `Option<T>` unwrap the type to decode, and wrap it back
         WrapperType::Option(return_ty) => {
-                quote! {
+            quote! {
                 pub fn #name(#self_param, #(#arg_names: #arg_types),*) -> Option<#return_ty> {
                     use alloy_sol_types::SolValue;
                     use alloc::vec::Vec;
@@ -264,7 +274,7 @@ fn generate_method_impl(
                     Some(<#return_ty>::abi_decode(&result, true).expect("Unable to decode"))
                 }
             }
-        },
+        }
         // Otherwise, simply decode the value + wrap it in an `Option` to force error-handling
         WrapperType::None => {
             let return_ty = match return_type {
@@ -295,7 +305,7 @@ fn generate_method_impl(
 pub enum WrapperType {
     Result(TokenStream, TokenStream),
     Option(TokenStream),
-    None
+    None,
 }
 
 // Helper function to extract Result or Option types if present
@@ -336,7 +346,7 @@ pub fn extract_wrapper_types(return_type: &ReturnType) -> WrapperType {
             };
 
             WrapperType::Result(ok_type, err_type)
-        },
+        }
         "Option" => {
             let PathArguments::AngleBracketed(args) = &last_segment.arguments else {
                 return WrapperType::None;
@@ -354,7 +364,7 @@ pub fn extract_wrapper_types(return_type: &ReturnType) -> WrapperType {
             };
 
             WrapperType::Option(inner_type)
-        },
+        }
         _ => WrapperType::None,
     }
 }
