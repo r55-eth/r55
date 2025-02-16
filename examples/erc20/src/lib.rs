@@ -3,7 +3,7 @@
 
 use core::default::Default;
 
-use contract_derive::{contract, payable, show_streams, storage, Event, Error};
+use contract_derive::{contract, payable, storage, Event, Error};
 use eth_riscv_runtime::types::*;
 
 use alloy_core::primitives::{address, Address, U256, Bytes};
@@ -23,7 +23,6 @@ pub struct ERC20 {
 }
 
 #[derive(Error)]
-#[show_streams]
 pub enum ERC20Error {
     OnlyOwner,
     ZeroAmount,

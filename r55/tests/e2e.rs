@@ -24,9 +24,9 @@ fn erc20() {
     let bytecode = compile_with_prefix(compile_deploy, ERC20_PATH).unwrap();
     let erc20 = deploy_contract(&mut db, bytecode, Some(constructor)).unwrap();
 
-    let total_supply = get_selector_from_sig("total_supply");
-    let selector_balance = get_selector_from_sig("balance_of");
-    let selector_mint = get_selector_from_sig("mint");
+    let total_supply = get_selector_from_sig("total_supply()");
+    let selector_balance = get_selector_from_sig("balance_of(address)");
+    let selector_mint = get_selector_from_sig("mint(address,uint256)");
 
     let value_mint = U256::from(42e18);
     let mut calldata_mint = (alice, value_mint).abi_encode();
@@ -96,9 +96,9 @@ fn erc20x() {
     let bytecode = compile_with_prefix(compile_deploy, ERC20_PATH).unwrap();
     let erc20 = deploy_contract(&mut db, bytecode, Some(constructor)).unwrap();
 
-    let total_supply = get_selector_from_sig("total_supply");
-    let selector_x_balance = get_selector_from_sig("x_balance_of");
-    let selector_x_mint = get_selector_from_sig("x_mint");
+    let total_supply = get_selector_from_sig("total_supply()");
+    let selector_x_balance = get_selector_from_sig("x_balance_of(address,address)");
+    let selector_x_mint = get_selector_from_sig("x_mint(address,uint256,address)");
 
     info!("----------------------------------------------------------");
     info!("-- X-MINT TX -----------------------------------------------");
