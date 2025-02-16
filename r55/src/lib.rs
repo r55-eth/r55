@@ -190,9 +190,14 @@ mod tests {
         let mut calldata_alice_balance = alice.abi_encode();
         let mut complete_calldata_alice_balance = selector_balance.to_vec();
         complete_calldata_alice_balance.append(&mut calldata_alice_balance);
-        let alice_balance_result = run_tx(&mut db, &erc20, complete_calldata_alice_balance.clone(), &alice)
-            .expect("Error executing tx")
-            .output;
+        let alice_balance_result = run_tx(
+            &mut db,
+            &erc20,
+            complete_calldata_alice_balance.clone(),
+            &alice,
+        )
+        .expect("Error executing tx")
+        .output;
 
         assert_eq!(
             U256::from_be_bytes::<32>(alice_balance_result.as_slice().try_into().unwrap()),
@@ -205,13 +210,19 @@ mod tests {
         let mut calldata_transfer = (bob, value_transfer).abi_encode();
         let mut complete_calldata_transfer = selector_transfer.to_vec();
         complete_calldata_transfer.append(&mut calldata_transfer);
-        let transfer_result = run_tx(&mut db, &erc20, complete_calldata_transfer.clone(), &alice).unwrap();
+        let transfer_result =
+            run_tx(&mut db, &erc20, complete_calldata_transfer.clone(), &alice).unwrap();
         assert!(transfer_result.status, "Transfer transaction failed");
 
         // Check Alice's balance
-        let alice_balance_result = run_tx(&mut db, &erc20, complete_calldata_alice_balance.clone(), &alice)
-            .expect("Error executing tx")
-            .output;
+        let alice_balance_result = run_tx(
+            &mut db,
+            &erc20,
+            complete_calldata_alice_balance.clone(),
+            &alice,
+        )
+        .expect("Error executing tx")
+        .output;
 
         assert_eq!(
             U256::from_be_bytes::<32>(alice_balance_result.as_slice().try_into().unwrap()),
@@ -223,9 +234,14 @@ mod tests {
         let mut calldata_bob_balance = bob.abi_encode();
         let mut complete_calldata_bob_balance = selector_balance.to_vec();
         complete_calldata_bob_balance.append(&mut calldata_bob_balance);
-        let bob_balance_result = run_tx(&mut db, &erc20, complete_calldata_bob_balance.clone(), &alice)
-            .expect("Error executing tx")
-            .output;
+        let bob_balance_result = run_tx(
+            &mut db,
+            &erc20,
+            complete_calldata_bob_balance.clone(),
+            &alice,
+        )
+        .expect("Error executing tx")
+        .output;
 
         assert_eq!(
             U256::from_be_bytes::<32>(bob_balance_result.as_slice().try_into().unwrap()),
@@ -238,16 +254,18 @@ mod tests {
         let mut calldata_approve = (carol, value_approve).abi_encode();
         let mut complete_calldata_approve = selector_approve.to_vec();
         complete_calldata_approve.append(&mut calldata_approve);
-        let approve_result = run_tx(&mut db, &erc20, complete_calldata_approve.clone(), &alice).unwrap();
+        let approve_result =
+            run_tx(&mut db, &erc20, complete_calldata_approve.clone(), &alice).unwrap();
         assert!(approve_result.status, "Approve transaction failed");
 
         // Check Carol's allowance
         let mut calldata_allowance = (alice, carol).abi_encode();
         let mut complete_calldata_allowance = selector_allowance.to_vec();
         complete_calldata_allowance.append(&mut calldata_allowance);
-        let carol_allowance_result = run_tx(&mut db, &erc20, complete_calldata_allowance.clone(), &alice)
-            .expect("Error executing tx")
-            .output;
+        let carol_allowance_result =
+            run_tx(&mut db, &erc20, complete_calldata_allowance.clone(), &alice)
+                .expect("Error executing tx")
+                .output;
 
         assert_eq!(
             U256::from_be_bytes::<32>(carol_allowance_result.as_slice().try_into().unwrap()),
@@ -442,7 +460,8 @@ mod tests {
         let selector_mint = get_selector_from_sig("mint(address,uint256)");
         let selector_approve = get_selector_from_sig("approve(address,uint256)");
         let selector_transfer = get_selector_from_sig("transfer(address,uint256)");
-        let selector_transfer_from = get_selector_from_sig("transfer_from(address,address,uint256)");
+        let selector_transfer_from =
+            get_selector_from_sig("transfer_from(address,address,uint256)");
 
         // Mint 42 tokens to Alice
         let value_mint = U256::from(42e18);
@@ -454,8 +473,11 @@ mod tests {
         assert!(mint_result.status, "Mint transaction failed");
 
         // Attempt mint with Bob (not contract owner)
-        let only_owner_result = run_tx(&mut db, &erc20, complete_mint_calldata, &bob).expect_err("Mint transaction succeeded");
-        if let Error::UnexpectedExecResult(ExecutionResult::Revert { gas_used, output }) = only_owner_result {
+        let only_owner_result = run_tx(&mut db, &erc20, complete_mint_calldata, &bob)
+            .expect_err("Mint transaction succeeded");
+        if let Error::UnexpectedExecResult(ExecutionResult::Revert { gas_used, output }) =
+            only_owner_result
+        {
             assert_eq!(
                 output,
                 Bytes::from(keccak256("ERC20Error::OnlyOwner")[..4].to_vec()),
@@ -471,8 +493,12 @@ mod tests {
         info!("CHECK MIN BALANCE WHEN TRANSFER");
 
         assert!(value_transfer > value_mint);
-        let insufficient_balance_result = run_tx(&mut db, &erc20, complete_calldata_transfer.clone(), &alice).expect_err("Transfer transaction succeeded");
-        if let Error::UnexpectedExecResult(ExecutionResult::Revert { gas_used, output }) = insufficient_balance_result {
+        let insufficient_balance_result =
+            run_tx(&mut db, &erc20, complete_calldata_transfer.clone(), &alice)
+                .expect_err("Transfer transaction succeeded");
+        if let Error::UnexpectedExecResult(ExecutionResult::Revert { gas_used, output }) =
+            insufficient_balance_result
+        {
             assert_eq!(
                 Bytes::from(output.clone()[..4].to_vec()),
                 Bytes::from(keccak256("ERC20Error::InsufficientBalance(uint256)")[..4].to_vec()),
@@ -491,7 +517,8 @@ mod tests {
         let mut complete_calldata_approve = selector_approve.to_vec();
         complete_calldata_approve.append(&mut calldata_approve);
 
-        let approve_result = run_tx(&mut db, &erc20, complete_calldata_approve.clone(), &alice).unwrap();
+        let approve_result =
+            run_tx(&mut db, &erc20, complete_calldata_approve.clone(), &alice).unwrap();
         assert!(approve_result.status, "Approve transaction failed");
 
         // Attempt transfer_from of all tokens (more than allowance) from Alice to Carol
@@ -500,9 +527,16 @@ mod tests {
         complete_calldata_transfer_from.append(&mut calldata_transfer_from);
 
         assert!(value_mint > value_approve);
-        let insufficient_allowance_result = run_tx(&mut db, &erc20, complete_calldata_transfer_from.clone(), &carol)
-            .expect_err("Transfer From tx succeeded");
-        if let Error::UnexpectedExecResult(ExecutionResult::Revert { gas_used, output }) = insufficient_allowance_result {
+        let insufficient_allowance_result = run_tx(
+            &mut db,
+            &erc20,
+            complete_calldata_transfer_from.clone(),
+            &carol,
+        )
+        .expect_err("Transfer From tx succeeded");
+        if let Error::UnexpectedExecResult(ExecutionResult::Revert { gas_used, output }) =
+            insufficient_allowance_result
+        {
             assert_eq!(
                 Bytes::from(output.clone()[..4].to_vec()),
                 Bytes::from(keccak256("ERC20Error::InsufficientAllowance(uint256)")[..4].to_vec()),
@@ -544,7 +578,8 @@ mod tests {
         let selector_x_mint = get_selector_from_sig("x_mint(address,uint256,address)");
         let selector_approve = get_selector_from_sig("approve(address,uint256)");
         let selector_balance_of = get_selector_from_sig("balance_of(address)");
-        let selector_x_transfer_from = get_selector_from_sig("x_transfer_from(address,uint256,address)");
+        let selector_x_transfer_from =
+            get_selector_from_sig("x_transfer_from(address,uint256,address)");
 
         // Mint 42 tokens to Alice
         let value_mint = U256::from(42e18);
@@ -561,8 +596,11 @@ mod tests {
         let mut complete_x_mint_calldata = selector_x_mint.to_vec();
         complete_x_mint_calldata.append(&mut calldata_x_mint);
 
-        let only_owner_result = run_tx(&mut db, &erc20x, complete_x_mint_calldata, &bob).expect_err("Mint transaction succeeded");
-        if let Error::UnexpectedExecResult(ExecutionResult::Revert { gas_used, output }) = only_owner_result {
+        let only_owner_result = run_tx(&mut db, &erc20x, complete_x_mint_calldata, &bob)
+            .expect_err("Mint transaction succeeded");
+        if let Error::UnexpectedExecResult(ExecutionResult::Revert { gas_used, output }) =
+            only_owner_result
+        {
             assert_eq!(
                 output,
                 Bytes::from(keccak256("ERC20Error::OnlyOwner")[..4].to_vec()),
@@ -575,8 +613,16 @@ mod tests {
         let mut complete_calldata_x_transfer_from = selector_x_transfer_from.to_vec();
         complete_calldata_x_transfer_from.append(&mut calldata_x_transfer_from);
 
-        let zero_amount_result = run_tx(&mut db, &erc20x, complete_calldata_x_transfer_from.clone(), &bob).expect_err("Transfer transaction succeeded");
-        if let Error::UnexpectedExecResult(ExecutionResult::Revert { gas_used, output }) = zero_amount_result {
+        let zero_amount_result = run_tx(
+            &mut db,
+            &erc20x,
+            complete_calldata_x_transfer_from.clone(),
+            &bob,
+        )
+        .expect_err("Transfer transaction succeeded");
+        if let Error::UnexpectedExecResult(ExecutionResult::Revert { gas_used, output }) =
+            zero_amount_result
+        {
             assert_eq!(
                 output,
                 Bytes::from(keccak256("ERC20Error::ZeroAmount")[..4].to_vec()),
@@ -590,21 +636,28 @@ mod tests {
         let mut complete_calldata_approve = selector_approve.to_vec();
         complete_calldata_approve.append(&mut calldata_approve);
 
-        let approve_result = run_tx(&mut db, &erc20, complete_calldata_approve.clone(), &alice).unwrap();
+        let approve_result =
+            run_tx(&mut db, &erc20, complete_calldata_approve.clone(), &alice).unwrap();
         assert!(approve_result.status, "Approve transaction failed");
 
         // Attempt cross-transfer 100 tokens (with a 10 token allowance) from Alice to Bob
-        let fallback_x_transfer_result = run_tx(&mut db, &erc20x, complete_calldata_x_transfer_from, &bob).expect("Error executing tx");
-        assert!(fallback_x_transfer_result.status, "Cross-transfer from transaction failed");
+        let fallback_x_transfer_result =
+            run_tx(&mut db, &erc20x, complete_calldata_x_transfer_from, &bob)
+                .expect("Error executing tx");
+        assert!(
+            fallback_x_transfer_result.status,
+            "Cross-transfer from transaction failed"
+        );
 
         // Check Bob's balance
         let mut calldata_balance_of = bob.abi_encode();
         let mut complete_calldata_balance_of = selector_balance_of.to_vec();
         complete_calldata_balance_of.append(&mut calldata_balance_of);
 
-        let bob_balance_result = run_tx(&mut db, &erc20, complete_calldata_balance_of.clone(), &bob)
-            .expect("Error executing tx")
-            .output;
+        let bob_balance_result =
+            run_tx(&mut db, &erc20, complete_calldata_balance_of.clone(), &bob)
+                .expect("Error executing tx")
+                .output;
 
         assert_eq!(
             U256::from_be_bytes::<32>(bob_balance_result.as_slice().try_into().unwrap()),
@@ -613,4 +666,3 @@ mod tests {
         );
     }
 }
-

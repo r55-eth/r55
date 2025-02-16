@@ -561,3 +561,331 @@ pub fn generate_deployment_code(
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use syn::parse_quote;
+
+    struct TestMethod { method: ImplItemMethod }
+    impl TestMethod {
+        fn new(name: &str, args: Vec<&str>) -> Self {
+            let name_ident = syn::Ident::new(name, proc_macro2::Span::call_site());
+            let args_tokens = if args.is_empty() {
+                quote!()
+            } else {
+                let args = args.iter().map(|arg| {
+                    let parts: Vec<&str> = arg.split(": ").collect();
+                    let arg_name = syn::Ident::new(parts[0], proc_macro2::Span::call_site());
+                    let type_str = parts[1];
+                    let type_tokens: proc_macro2::TokenStream = type_str.parse().unwrap();
+                    quote!(#arg_name: #type_tokens)
+                });
+                quote!(, #(#args),*)
+            };
+
+            let method: ImplItemMethod = parse_quote! {
+                fn #name_ident(&self #args_tokens) {}
+            };
+            Self { method }
+        }
+
+        fn info(&self) -> MethodInfo { MethodInfo::from(self) }
+    }
+
+    impl<'a> From<&'a TestMethod> for MethodInfo<'a> {
+        fn from(test_method: &'a TestMethod) -> Self {
+            MethodInfo::from(&test_method.method)
+        }
+    }
+
+    pub fn get_selector_from_sig(sig: &str) -> [u8; 4] {
+        keccak256(sig.as_bytes())[0..4]
+            .try_into()
+            .expect("Selector should have exactly 4 bytes")
+    }
+
+    #[test]
+    fn test_rust_to_sol_basic_types() {
+        let test_cases = vec![
+            (parse_quote!(Address), DynSolType::Address),
+            (parse_quote!(Function), DynSolType::Function),
+            (parse_quote!(bool), DynSolType::Bool),
+            (parse_quote!(Bool), DynSolType::Bool),
+            (parse_quote!(String), DynSolType::String),
+            (parse_quote!(str), DynSolType::String),
+            (parse_quote!(Bytes), DynSolType::Bytes),
+        ];
+
+        for (rust_type, expected_sol_type) in test_cases {
+            assert_eq!(
+                rust_type_to_sol_type(&rust_type).unwrap(),
+                expected_sol_type
+            );
+        }
+    }
+
+    #[test]
+    fn test_rust_to_sol_fixed_bytes() {
+        let test_cases = vec![
+            (parse_quote!(B1), DynSolType::FixedBytes(1)),
+            (parse_quote!(B16), DynSolType::FixedBytes(16)),
+            (parse_quote!(B32), DynSolType::FixedBytes(32)),
+        ];
+
+        for (rust_type, expected_sol_type) in test_cases {
+            assert_eq!(
+                rust_type_to_sol_type(&rust_type).unwrap(),
+                expected_sol_type
+            );
+        }
+
+        // Invalid cases
+        assert!(rust_type_to_sol_type(&parse_quote!(B0)).is_err());
+        assert!(rust_type_to_sol_type(&parse_quote!(B33)).is_err());
+    }
+
+    #[test]
+    fn test_rust_to_sol_integers() {
+        let test_cases = vec![
+            (parse_quote!(U8), DynSolType::Uint(8)),
+            (parse_quote!(U256), DynSolType::Uint(256)),
+            (parse_quote!(I8), DynSolType::Int(8)),
+            (parse_quote!(I256), DynSolType::Int(256)),
+        ];
+
+        for (rust_type, expected_sol_type) in test_cases {
+            assert_eq!(
+                rust_type_to_sol_type(&rust_type).unwrap(),
+                expected_sol_type
+            );
+        }
+
+        // Invalid cases
+        assert!(rust_type_to_sol_type(&parse_quote!(U0)).is_err());
+        assert!(rust_type_to_sol_type(&parse_quote!(U257)).is_err());
+        assert!(rust_type_to_sol_type(&parse_quote!(U7)).is_err()); // Not multiple of 8
+        assert!(rust_type_to_sol_type(&parse_quote!(I0)).is_err());
+        assert!(rust_type_to_sol_type(&parse_quote!(I257)).is_err());
+        assert!(rust_type_to_sol_type(&parse_quote!(I7)).is_err()); // Not multiple of 8
+    }
+
+    #[test]
+    fn test_rust_to_sol_arrays() {
+        // Dynamic arrays (Vec)
+        assert_eq!(
+            rust_type_to_sol_type(&parse_quote!(Vec<U256>)).unwrap(),
+            DynSolType::Array(Box::new(DynSolType::Uint(256)))
+        );
+
+        assert_eq!(
+            rust_type_to_sol_type(&parse_quote!(Vec<Bool>)).unwrap(),
+            DynSolType::Array(Box::new(DynSolType::Bool))
+        );
+
+        // Fixed-size arrays
+        assert_eq!(
+            rust_type_to_sol_type(&parse_quote!([U256; 5])).unwrap(),
+            DynSolType::FixedArray(Box::new(DynSolType::Uint(256)), 5)
+        );
+
+        assert_eq!(
+            rust_type_to_sol_type(&parse_quote!([Bool; 3])).unwrap(),
+            DynSolType::FixedArray(Box::new(DynSolType::Bool), 3)
+        );
+    }
+
+    #[test]
+    fn test_rust_to_sol_tuples() {
+        assert_eq!(
+            rust_type_to_sol_type(&parse_quote!((U256, Bool))).unwrap(),
+            DynSolType::Tuple(vec![DynSolType::Uint(256), DynSolType::Bool])
+        );
+
+        assert_eq!(
+            rust_type_to_sol_type(&parse_quote!((Address, B32, I128))).unwrap(),
+            DynSolType::Tuple(vec![
+                DynSolType::Address,
+                DynSolType::FixedBytes(32),
+                DynSolType::Int(128)
+            ])
+        );
+    }
+
+    #[test]
+    fn test_rust_to_sol_nested_types() {
+        // Nested Vec
+        assert_eq!(
+            rust_type_to_sol_type(&parse_quote!(Vec<Vec<U256>>)).unwrap(),
+            DynSolType::Array(Box::new(DynSolType::Array(Box::new(DynSolType::Uint(256)))))
+        );
+
+        // Nested fixed array
+        assert_eq!(
+            rust_type_to_sol_type(&parse_quote!([[U256; 2]; 3])).unwrap(),
+            DynSolType::FixedArray(
+                Box::new(DynSolType::FixedArray(Box::new(DynSolType::Uint(256)), 2)),
+                3
+            )
+        );
+
+        // Nested tuple
+        assert_eq!(
+            rust_type_to_sol_type(&parse_quote!((U256, (Bool, Address)))).unwrap(),
+            DynSolType::Tuple(vec![
+                DynSolType::Uint(256),
+                DynSolType::Tuple(vec![DynSolType::Bool, DynSolType::Address])
+            ])
+        );
+    }
+
+    #[test]
+    fn test_rust_to_sol_invalid_types() {
+        // Invalid type names
+        assert!(rust_type_to_sol_type(&parse_quote!(InvalidType)).is_err());
+
+        // Invalid generic types
+        assert!(rust_type_to_sol_type(&parse_quote!(Option<U256>)).is_err());
+        assert!(rust_type_to_sol_type(&parse_quote!(Result<U256>)).is_err());
+    }
+
+    #[test]
+    fn test_fn_selector() {
+        // No arguments
+        let method = TestMethod::new("balance", vec![]);
+        assert_eq!(
+            generate_fn_selector(&method.info(), None).unwrap(),
+            get_selector_from_sig("balance()"),
+        );
+
+        // Single argument
+        let method = TestMethod::new("transfer", vec!["to: Address"]);
+        assert_eq!(
+            generate_fn_selector(&method.info(), None).unwrap(),
+            get_selector_from_sig("transfer(address)"),
+        );
+
+        // Multiple arguments
+        let method = TestMethod::new(
+            "transfer_from",
+            vec!["from: Address", "to: Address", "amount: U256"],
+        );
+        assert_eq!(
+            generate_fn_selector(&method.info(), None).unwrap(),
+            get_selector_from_sig("transfer_from(address,address,uint256)")
+        );
+
+        // Dynamic arrays
+        let method = TestMethod::new("batch_transfer", vec!["recipients: Vec<Address>"]);
+        assert_eq!(
+            generate_fn_selector(&method.info(), None).unwrap(),
+            get_selector_from_sig("batch_transfer(address[])")
+        );
+
+        // Tuples
+        let method = TestMethod::new("complex_transfer", vec!["data: (Address, U256)", "check: (Vec<Address>, Vec<Bool>)"]);
+        assert_eq!(
+            generate_fn_selector(&method.info(), None).unwrap(),
+            get_selector_from_sig("complex_transfer((address,uint256),(address[],bool[]))")
+        );
+
+        // Fixed arrays
+        let method = TestMethod::new("multi_transfer", vec!["amounts: [U256; 3]"]);
+        assert_eq!(
+            generate_fn_selector(&method.info(), None).unwrap(),
+            get_selector_from_sig("multi_transfer(uint256[3])")
+        );
+    }
+
+    #[test]
+    fn test_fn_selector_rename_camel_case() {
+        let method = TestMethod::new("get_balance", vec![]);
+        assert_eq!(
+            generate_fn_selector(&method.info(), Some(InterfaceNamingStyle::CamelCase)).unwrap(),
+            get_selector_from_sig("getBalance()")
+        );
+
+        let method = TestMethod::new("transfer_from_account", vec!["to: Address"]);
+        assert_eq!(
+            generate_fn_selector(&method.info(), Some(InterfaceNamingStyle::CamelCase)).unwrap(),
+            get_selector_from_sig("transferFromAccount(address)")
+        );
+    }
+
+    #[test]
+    fn test_fn_selector_erc20() {
+        let cases = vec![
+            ("totalSupply", vec![], "totalSupply()"),
+            ("balanceOf", vec!["account: Address"], "balanceOf(address)"),
+            (
+                "transfer",
+                vec!["recipient: Address", "amount: U256"],
+                "transfer(address,uint256)",
+            ),
+            (
+                "allowance",
+                vec!["owner: Address", "spender: Address"],
+                "allowance(address,address)",
+            ),
+            (
+                "approve",
+                vec!["spender: Address", "amount: U256"],
+                "approve(address,uint256)",
+            ),
+            (
+                "transferFrom",
+                vec!["sender: Address", "recipient: Address", "amount: U256"],
+                "transferFrom(address,address,uint256)",
+            ),
+        ];
+
+        for (name, args, signature) in cases {
+            let method = TestMethod::new(name, args);
+            assert_eq!(
+                generate_fn_selector(&method.info(), None).unwrap(),
+                get_selector_from_sig(signature),
+                "Selector mismatch for {}",
+                signature
+            );
+        }
+    }
+
+    #[test]
+    fn test_fn_selector_erc721() {
+        let cases = vec![
+            (
+                "safeTransferFrom",
+                vec![
+                    "from: Address",
+                    "to: Address",
+                    "tokenId: U256",
+                    "data: Bytes",
+                ],
+                "safeTransferFrom(address,address,uint256,bytes)",
+            ),
+            ("name", vec![], "name()"),
+            ("symbol", vec![], "symbol()"),
+            ("tokenURI", vec!["tokenId: U256"], "tokenURI(uint256)"),
+            (
+                "approve",
+                vec!["to: Address", "tokenId: U256"],
+                "approve(address,uint256)",
+            ),
+            (
+                "setApprovalForAll",
+                vec!["operator: Address", "approved: bool"],
+                "setApprovalForAll(address,bool)",
+            ),
+        ];
+
+        for (name, args, signature) in cases {
+            let method = TestMethod::new(name, args);
+            assert_eq!(
+                generate_fn_selector(&method.info(), None).unwrap(),
+                get_selector_from_sig(signature),
+                "Selector mismatch for {}",
+                signature
+            );
+        }
+    }
+}

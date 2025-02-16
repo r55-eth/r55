@@ -143,7 +143,12 @@ fn erc20x() {
         "Tx calldata:\n> {:#?}",
         Bytes::from(complete_calldata_x_balance.clone())
     );
-    match run_tx(&mut db, &erc20x, complete_calldata_x_balance.clone(), &alice) {
+    match run_tx(
+        &mut db,
+        &erc20x,
+        complete_calldata_x_balance.clone(),
+        &alice,
+    ) {
         Ok(res) => info!("{}", res),
         Err(e) => {
             error!("Error when executing tx! {:#?}", e);
