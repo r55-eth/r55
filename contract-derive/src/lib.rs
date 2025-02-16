@@ -1,5 +1,5 @@
 extern crate proc_macro;
-use alloy_core::primitives::{keccak256, U256};
+use alloy_core::primitives::U256;
 use alloy_sol_types::SolValue;
 use proc_macro::TokenStream;
 use quote::{format_ident, quote};
@@ -127,7 +127,7 @@ pub fn contract(_attr: TokenStream, item: TokenStream) -> TokenStream {
         let method_name = &method.sig.ident;
         let method_info = MethodInfo::from(*method);
         let method_selector = u32::from_be_bytes(
-            helpers::generate_selector_evm(&method_info, None)
+            helpers::generate_fn_selector(&method_info, None)
                 .expect("Unable to generate fn selector")
         );
         let (arg_names, arg_types) = helpers::get_arg_props_skip_first(&method_info);
