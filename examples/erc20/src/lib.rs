@@ -3,7 +3,7 @@
 
 use core::default::Default;
 
-use contract_derive::{contract, payable, storage, Event};
+use contract_derive::{show_streams, contract, payable, storage, Event};
 use eth_riscv_runtime::types::*;
 
 use alloy_core::primitives::{address, Address, U256};

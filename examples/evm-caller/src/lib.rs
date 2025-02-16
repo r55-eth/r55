@@ -12,7 +12,7 @@ use alloc::{string::String, vec::Vec};
 #[derive(Default)]
 pub struct EVMCaller;
 
-#[interface(target = "evm", rename = "camelCase")]
+#[interface("camelCase")]
 trait ISimpleStorage {
     fn get(&self) -> U256;
     fn set(&mut self, value: U256);

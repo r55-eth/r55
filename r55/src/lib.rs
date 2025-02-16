@@ -144,13 +144,13 @@ mod tests {
         let erc20 = deploy_contract(&mut db, bytecode, Some(constructor)).unwrap();
 
         // Define fn selectors
-        let selector_owner = get_selector_from_sig("owner");
-        let selector_total_supply = get_selector_from_sig("total_supply");
-        let selector_balance = get_selector_from_sig("balance_of");
-        let selector_mint = get_selector_from_sig("mint");
-        let selector_transfer = get_selector_from_sig("transfer");
-        let selector_approve = get_selector_from_sig("approve");
-        let selector_allowance = get_selector_from_sig("allowance");
+        let selector_owner = get_selector_from_sig("owner()");
+        let selector_total_supply = get_selector_from_sig("total_supply()");
+        let selector_balance = get_selector_from_sig("balance_of(address)");
+        let selector_mint = get_selector_from_sig("mint(address,uint256)");
+        let selector_transfer = get_selector_from_sig("transfer(address,uint256)");
+        let selector_approve = get_selector_from_sig("approve(address,uint256)");
+        let selector_allowance = get_selector_from_sig("allowance(address,address)");
 
         // Check that Alice is the contract owner
         let owner_result = run_tx(&mut db, &erc20, selector_owner.to_vec())
@@ -272,7 +272,7 @@ mod tests {
         let erc20 = deploy_contract(&mut db, bytecode, Some(constructor)).unwrap();
 
         // Mint tokens to Alice
-        let selector_mint = get_selector_from_sig("mint");
+        let selector_mint = get_selector_from_sig("mint(address,uint256)");
         let mut calldata_mint = (alice, 100u64).abi_encode();
         let mut complete_mint_calldata = selector_mint.to_vec();
         complete_mint_calldata.append(&mut calldata_mint);
@@ -281,7 +281,7 @@ mod tests {
         assert!(mint_result.status, "Mint transaction failed");
 
         // Transfer tokens from Alice to Bob
-        let selector_transfer = get_selector_from_sig("transfer");
+        let selector_transfer = get_selector_from_sig("transfer(address,uint256)");
         let mut calldata_transfer = (bob, 50u64).abi_encode();
         let mut complete_transfer_calldata = selector_transfer.to_vec();
         complete_transfer_calldata.append(&mut calldata_transfer);
@@ -348,7 +348,7 @@ mod tests {
 
         // Mint tokens to Alice
         let mint_alice = U256::from(10e18);
-        let selector_mint = get_selector_from_sig("mint");
+        let selector_mint = get_selector_from_sig("mint(address,uint256)");
         let mut calldata_mint = (alice, mint_alice).abi_encode();
         let mut complete_mint_calldata = selector_mint.to_vec();
         complete_mint_calldata.append(&mut calldata_mint);
@@ -367,7 +367,7 @@ mod tests {
 
         // Approve Carol to spend 10 tokens from Alice
         let allowance_carol = U256::from(5e18);
-        let selector_approve = get_selector_from_sig("approve");
+        let selector_approve = get_selector_from_sig("approve(address,uint256)");
         let mut calldata_approve = (carol, allowance_carol).abi_encode();
         let mut complete_calldata_approve = selector_approve.to_vec();
         complete_calldata_approve.append(&mut calldata_approve);

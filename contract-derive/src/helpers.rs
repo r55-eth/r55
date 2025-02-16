@@ -3,8 +3,7 @@ use alloy_dyn_abi::DynSolType;
 use proc_macro2::TokenStream;
 use quote::{format_ident, quote};
 use syn::{
-    parse::{Parse, ParseStream},
-    FnArg, Ident, ImplItemMethod, ReturnType, TraitItemMethod, Type,
+    parse::{Parse, ParseStream}, FnArg, Ident, ImplItemMethod, LitStr, ReturnType, TraitItemMethod, Type
 };
 
 // Unified method info from `ImplItemMethod` and `TraitItemMethod`
@@ -74,96 +73,35 @@ pub fn get_arg_props_all<'a>(method: &'a MethodInfo<'a>) -> (Vec<Ident>, Vec<&sy
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
-pub enum InterfaceCompilationTarget {
-    R55,
-    EVM,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq)]
 pub enum InterfaceNamingStyle {
     CamelCase,
 }
 
 pub struct InterfaceArgs {
-    pub target: InterfaceCompilationTarget,
     pub rename: Option<InterfaceNamingStyle>,
 }
 
 impl Parse for InterfaceArgs {
     fn parse(input: ParseStream) -> Result<Self, syn::Error> {
-        // default arg values if uninformed
-        let mut target = InterfaceCompilationTarget::R55;
-        let mut rename_style = None;
+        let rename_style = if !input.is_empty() {
+            let value = if input.peek(LitStr) {
+                input.parse::<LitStr>()?.value()
+            } else {
+                input.parse::<Ident>()?.to_string()
+            };
 
-        // Parse all attributes
-        let mut first = true;
-        while !input.is_empty() {
-            if !first {
-                input.parse::<syn::Token![,]>()?;
+            match value.as_str() {
+                "camelCase" => Some(InterfaceNamingStyle::CamelCase),
+                invalid => return Err(syn::Error::new(
+                    input.span(),
+                    format!("unsupported style: {}. Only 'camelCase' is supported", invalid)
+                ))
             }
-            first = false;
+        } else {
+            None
+        };
 
-            let key: syn::Ident = input.parse()?;
-
-            match key.to_string().as_str() {
-                "rename" => {
-                    input.parse::<syn::Token![=]>()?;
-
-                    // Handle both string literals and identifiers
-                    let value = if input.peek(syn::LitStr) {
-                        let lit: syn::LitStr = input.parse()?;
-                        lit.value()
-                    } else {
-                        let ident: syn::Ident = input.parse()?;
-                        ident.to_string()
-                    };
-
-                    rename_style = Some(match value.as_str() {
-                        "camelCase" => InterfaceNamingStyle::CamelCase,
-                        invalid => {
-                            return Err(syn::Error::new(
-                                key.span(),
-                                format!("unsupported rename style: {}", invalid),
-                            ))
-                        }
-                    });
-                }
-                "target" => {
-                    input.parse::<syn::Token![=]>()?;
-
-                    // Handle both string literals and identifiers
-                    let value = if input.peek(syn::LitStr) {
-                        let lit: syn::LitStr = input.parse()?;
-                        lit.value()
-                    } else {
-                        let ident: syn::Ident = input.parse()?;
-                        ident.to_string()
-                    };
-
-                    target = match value.as_str() {
-                        "r55" => InterfaceCompilationTarget::R55,
-                        "evm" => InterfaceCompilationTarget::EVM,
-                        invalid => {
-                            return Err(syn::Error::new(
-                                key.span(),
-                                format!("unsupported compilation target: {}", invalid),
-                            ))
-                        }
-                    };
-                }
-                invalid => {
-                    return Err(syn::Error::new(
-                        key.span(),
-                        format!("unknown attribute: {}", invalid),
-                    ))
-                }
-            }
-        }
-
-        Ok(InterfaceArgs {
-            target,
-            rename: rename_style,
-        })
+        Ok(InterfaceArgs { rename: rename_style })
     }
 }
 
@@ -172,7 +110,6 @@ pub fn generate_interface<T>(
     methods: &[&T],
     interface_name: &Ident,
     interface_style: Option<InterfaceNamingStyle>,
-    interface_target: InterfaceCompilationTarget,
 ) -> quote::__private::TokenStream
 where
     for<'a> MethodInfo<'a>: From<&'a T>,
@@ -184,10 +121,10 @@ where
     // Generate implementations
     let mut_method_impls = mut_methods
         .iter()
-        .map(|method| generate_method_impl(method, interface_target, interface_style, true));
+        .map(|method| generate_method_impl(method, interface_style, true));
     let immut_method_impls = immut_methods
         .iter()
-        .map(|method| generate_method_impl(method, interface_target, interface_style, false));
+        .map(|method| generate_method_impl(method, interface_style, false));
 
     quote! {
         use core::marker::PhantomData;
@@ -238,22 +175,14 @@ where
 
 fn generate_method_impl(
     method: &MethodInfo,
-    interface_target: InterfaceCompilationTarget,
     interface_style: Option<InterfaceNamingStyle>,
     is_mutable: bool,
 ) -> TokenStream {
     let name = method.name;
     let return_type = method.return_type;
-    let method_selector = match interface_target {
-        InterfaceCompilationTarget::R55 => u32::from_be_bytes(
-            generate_selector_r55(method, interface_style)
-                .expect("Unable to generate r55 fn selector"),
-        ),
-        InterfaceCompilationTarget::EVM => u32::from_be_bytes(
-            generate_selector_evm(method, interface_style)
-                .expect("Unable to generate evm fn selector"),
-        ),
-    };
+    let method_selector = u32::from_be_bytes(
+        generate_fn_selector(method, interface_style).expect("Unable to generate fn selector")
+    );
 
     let (arg_names, arg_types) = get_arg_props_skip_first(method);
 
@@ -317,22 +246,8 @@ fn generate_method_impl(
     }
 }
 
-// Helper function to generate fn selector for r55 contracts
-pub fn generate_selector_r55(
-    method: &MethodInfo,
-    style: Option<InterfaceNamingStyle>,
-) -> Option<[u8; 4]> {
-    let name = match style {
-        None => method.name.to_string(),
-        Some(style) => match style {
-            InterfaceNamingStyle::CamelCase => to_camel_case(method.name.to_string()),
-        },
-    };
-    keccak256(name)[..4].try_into().ok()
-}
-
-// Helper function to generate fn selector for evm contracts
-pub fn generate_selector_evm(
+// Helper function to generate fn selector
+pub fn generate_fn_selector(
     method: &MethodInfo,
     style: Option<InterfaceNamingStyle>,
 ) -> Option<[u8; 4]> {
@@ -356,7 +271,8 @@ pub fn generate_selector_evm(
         .join(",");
 
     let selector = format!("{}({})", name, args_str);
-    keccak256(selector)[..4].try_into().ok()
+    let selector_bytes = keccak256(selector.as_bytes())[..4].try_into().ok()?;
+    Some(selector_bytes)
 }
 
 // Helper function to convert rust types to their solidity equivalent

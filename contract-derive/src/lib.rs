@@ -9,7 +9,7 @@ use syn::{
 };
 
 mod helpers;
-use crate::helpers::{InterfaceArgs, InterfaceCompilationTarget, MethodInfo};
+use crate::helpers::{InterfaceArgs, MethodInfo};
 
 #[proc_macro_derive(Event, attributes(indexed))]
 pub fn event_derive(input: TokenStream) -> TokenStream {
@@ -125,12 +125,11 @@ pub fn contract(_attr: TokenStream, item: TokenStream) -> TokenStream {
         .collect();
     let match_arms: Vec<_> = public_methods.iter().map(|method| {
         let method_name = &method.sig.ident;
-        let method_selector = u32::from_be_bytes(
-            keccak256(
-                method_name.to_string()
-            )[..4].try_into().unwrap_or_default()
-        );
         let method_info = MethodInfo::from(*method);
+        let method_selector = u32::from_be_bytes(
+            helpers::generate_selector_evm(&method_info, None)
+                .expect("Unable to generate fn selector")
+        );
         let (arg_names, arg_types) = helpers::get_arg_props_skip_first(&method_info);
 
         // Check if there are payable methods
@@ -224,7 +223,6 @@ pub fn contract(_attr: TokenStream, item: TokenStream) -> TokenStream {
         &public_methods,
         &interface_name,
         None,
-        InterfaceCompilationTarget::R55,
     );
 
     // Generate initcode for deployments
@@ -343,7 +341,7 @@ pub fn interface(attr: TokenStream, item: TokenStream) -> TokenStream {
         .collect();
 
     // Generate intreface implementation
-    let interface = helpers::generate_interface(&methods, trait_name, None, args.target);
+    let interface = helpers::generate_interface(&methods, trait_name, args.rename);
 
     let output = quote! {
         #interface
