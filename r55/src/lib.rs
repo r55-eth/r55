@@ -436,7 +436,6 @@ mod tests {
 
     #[test]
     fn test_custom_error() {
-        use tracing::info;
         initialize_logger();
 
         let mut db = InMemoryDB::default();
@@ -475,8 +474,10 @@ mod tests {
         // Attempt mint with Bob (not contract owner)
         let only_owner_result = run_tx(&mut db, &erc20, complete_mint_calldata, &bob)
             .expect_err("Mint transaction succeeded");
-        if let Error::UnexpectedExecResult(ExecutionResult::Revert { gas_used, output }) =
-            only_owner_result
+        if let Error::UnexpectedExecResult(ExecutionResult::Revert {
+            gas_used: _,
+            output,
+        }) = only_owner_result
         {
             assert_eq!(
                 output,
@@ -490,14 +491,15 @@ mod tests {
         let mut calldata_transfer = (bob, value_transfer).abi_encode();
         let mut complete_calldata_transfer = selector_transfer.to_vec();
         complete_calldata_transfer.append(&mut calldata_transfer);
-        info!("CHECK MIN BALANCE WHEN TRANSFER");
 
         assert!(value_transfer > value_mint);
         let insufficient_balance_result =
             run_tx(&mut db, &erc20, complete_calldata_transfer.clone(), &alice)
                 .expect_err("Transfer transaction succeeded");
-        if let Error::UnexpectedExecResult(ExecutionResult::Revert { gas_used, output }) =
-            insufficient_balance_result
+        if let Error::UnexpectedExecResult(ExecutionResult::Revert {
+            gas_used: _,
+            output,
+        }) = insufficient_balance_result
         {
             assert_eq!(
                 Bytes::from(output.clone()[..4].to_vec()),
@@ -534,8 +536,10 @@ mod tests {
             &carol,
         )
         .expect_err("Transfer From tx succeeded");
-        if let Error::UnexpectedExecResult(ExecutionResult::Revert { gas_used, output }) =
-            insufficient_allowance_result
+        if let Error::UnexpectedExecResult(ExecutionResult::Revert {
+            gas_used: _,
+            output,
+        }) = insufficient_allowance_result
         {
             assert_eq!(
                 Bytes::from(output.clone()[..4].to_vec()),
@@ -597,8 +601,10 @@ mod tests {
 
         let only_owner_result = run_tx(&mut db, &erc20x, complete_x_mint_calldata, &bob)
             .expect_err("Mint transaction succeeded");
-        if let Error::UnexpectedExecResult(ExecutionResult::Revert { gas_used, output }) =
-            only_owner_result
+        if let Error::UnexpectedExecResult(ExecutionResult::Revert {
+            gas_used: _,
+            output,
+        }) = only_owner_result
         {
             assert_eq!(
                 output,
@@ -619,8 +625,10 @@ mod tests {
             &bob,
         )
         .expect_err("Transfer transaction succeeded");
-        if let Error::UnexpectedExecResult(ExecutionResult::Revert { gas_used, output }) =
-            zero_amount_result
+        if let Error::UnexpectedExecResult(ExecutionResult::Revert {
+            gas_used: _,
+            output,
+        }) = zero_amount_result
         {
             assert_eq!(
                 output,
@@ -692,8 +700,10 @@ mod tests {
         // Attempt a call that panics with a string msg
         let panic_result =
             run_tx(&mut db, &erc20x, selector_panic.to_vec(), &alice).expect_err("Tx succeeded");
-        if let Error::UnexpectedExecResult(ExecutionResult::Revert { gas_used, output }) =
-            panic_result
+        if let Error::UnexpectedExecResult(ExecutionResult::Revert {
+            gas_used: _,
+            output,
+        }) = panic_result
         {
             assert_eq!(
                 output,
@@ -709,8 +719,10 @@ mod tests {
         let x_mint_panic_result =
             run_tx(&mut db, &erc20x, complete_x_mint_calldata.to_vec(), &alice)
                 .expect_err("Tx succeeded");
-        if let Error::UnexpectedExecResult(ExecutionResult::Revert { gas_used, output }) =
-            x_mint_panic_result
+        if let Error::UnexpectedExecResult(ExecutionResult::Revert {
+            gas_used: _,
+            output,
+        }) = x_mint_panic_result
         {
             assert_eq!(
                 output,
