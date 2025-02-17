@@ -41,7 +41,6 @@ fn evm_call() {
 
     let mut db = InMemoryDB::default();
 
-    println!("PATH: {:#?}", EVM_PATH);
     let bytecode_evm = load_bytecode_from_file(EVM_PATH);
     let bytecode_r55 = compile_with_prefix(compile_deploy, RISCV_PATH).unwrap();
     let evm = deploy_contract(&mut db, bytecode_evm, None).unwrap();
@@ -77,7 +76,7 @@ fn evm_call() {
     };
 
     info!("----------------------------------------------------------");
-    info!("-- X-GET VALUE TX (R55 CONTRACT > EVM CONTRACT) ----------");
+    info!("-- X-GET VALUE TX (R55 CONTRACT -> EVM CONTRACT) ----------");
     info!("----------------------------------------------------------");
     // call traces: r55.x_get() > evm.get()
     let mut calldata_x_get = evm.abi_encode();
@@ -103,7 +102,7 @@ fn evm_call() {
     }
 
     info!("----------------------------------------------------------");
-    info!("-- X-SET VALUE TX (R55 CONTRACT > EVM CONTRACT) ----------");
+    info!("-- X-SET VALUE TX (R55 CONTRACT -> EVM CONTRACT) ----------");
     info!("----------------------------------------------------------");
     // call traces: r55.x_set() > evm.set()
     let value_x_set = U256::from(3e18);
@@ -142,7 +141,7 @@ fn evm_call() {
     };
 
     info!("----------------------------------------------------------");
-    info!("-- RAW-CALL TX (EVM > R55 > EVM ) -----------------");
+    info!("-- RAW-CALL TX (EVM -> R55 -> EVM ) ----------------------");
     info!("----------------------------------------------------------");
     // call traces: evm.rawCall() > r55.x_set() > evm.set()
     let value_raw_call_x_set = U256::from(5e18);
