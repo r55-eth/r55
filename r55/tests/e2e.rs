@@ -28,14 +28,14 @@ fn erc20() {
     let selector_balance = get_selector_from_sig("balance_of(address)");
     let selector_mint = get_selector_from_sig("mint(address,uint256)");
 
+    info!("----------------------------------------------------------");
+    info!("-- MINT TX -----------------------------------------------");
+    info!("----------------------------------------------------------");
     let value_mint = U256::from(42e18);
     let mut calldata_mint = (alice, value_mint).abi_encode();
     let mut complete_calldata_mint = selector_mint.to_vec();
     complete_calldata_mint.append(&mut calldata_mint);
 
-    info!("----------------------------------------------------------");
-    info!("-- MINT TX -----------------------------------------------");
-    info!("----------------------------------------------------------");
     debug!(
         "Tx Calldata:\n> {:#?}",
         Bytes::from(complete_calldata_mint.clone())
@@ -43,7 +43,7 @@ fn erc20() {
     match run_tx(&mut db, &erc20, complete_calldata_mint.clone(), &alice) {
         Ok(res) => info!("{}", res),
         Err(e) => {
-            error!("Error when executing tx! {:#?}", e);
+            error!("Error when executing tx! {}", e);
             panic!()
         }
     };
@@ -55,18 +55,18 @@ fn erc20() {
     match run_tx(&mut db, &erc20, total_supply.to_vec(), &alice) {
         Ok(res) => info!("Success! {}", res),
         Err(e) => {
-            error!("Error when executing tx! {:#?}", e);
+            error!("Error when executing tx! {}", e);
             panic!()
         }
     };
 
-    let mut calldata_balance = alice.abi_encode();
-
-    let mut complete_calldata_balance = selector_balance.to_vec();
-    complete_calldata_balance.append(&mut calldata_balance);
     info!("----------------------------------------------------------");
     info!("-- BALANCE OF TX -----------------------------------------");
     info!("----------------------------------------------------------");
+    let mut calldata_balance = alice.abi_encode();
+    let mut complete_calldata_balance = selector_balance.to_vec();
+    complete_calldata_balance.append(&mut calldata_balance);
+
     debug!(
         "Tx Calldata:\n> {:#?}",
         Bytes::from(complete_calldata_balance.clone())
@@ -74,7 +74,7 @@ fn erc20() {
     match run_tx(&mut db, &erc20, complete_calldata_balance.clone(), &alice) {
         Ok(res) => info!("{}", res),
         Err(e) => {
-            error!("Error when executing tx! {:#?}", e);
+            error!("Error when executing tx! {}", e);
             panic!()
         }
     };
@@ -103,10 +103,10 @@ fn erc20x() {
     info!("----------------------------------------------------------");
     info!("-- X-MINT TX -----------------------------------------------");
     info!("----------------------------------------------------------");
-
     let value_x_mint = U256::from(42e18);
     let mut complete_calldata_x_mint = selector_x_mint.to_vec();
     complete_calldata_x_mint.append(&mut (alice, value_x_mint, erc20).abi_encode());
+
     debug!(
         "Tx Calldata:\n> {:#?}",
         Bytes::from(complete_calldata_x_mint.clone())
@@ -122,7 +122,6 @@ fn erc20x() {
     info!("----------------------------------------------------------");
     info!("-- TOTAL SUPPLY ------------------------------------------");
     info!("----------------------------------------------------------");
-
     debug!("Tx Calldata:\n> {:#?}", Bytes::from(total_supply.to_vec()));
     match run_tx(&mut db, &erc20, total_supply.to_vec(), &alice) {
         Ok(res) => info!("Success! {}", res),
@@ -135,10 +134,10 @@ fn erc20x() {
     info!("----------------------------------------------------------");
     info!("-- X-CONTRACT BALANCE OF TX ------------------------------");
     info!("----------------------------------------------------------");
-
     let mut calldata_x_balance = (alice, erc20).abi_encode();
     let mut complete_calldata_x_balance = selector_x_balance.to_vec();
     complete_calldata_x_balance.append(&mut calldata_x_balance);
+
     debug!(
         "Tx calldata:\n> {:#?}",
         Bytes::from(complete_calldata_x_balance.clone())
@@ -151,7 +150,7 @@ fn erc20x() {
     ) {
         Ok(res) => info!("{}", res),
         Err(e) => {
-            error!("Error when executing tx! {:#?}", e);
+            error!("Error when executing tx! {}", e);
             panic!();
         }
     }

@@ -25,6 +25,6 @@ impl EVMCaller {
     }
 
     pub fn x_get(&self, target: Address) -> U256 {
-        ISimpleStorage::new(target).with_ctx(self).get().unwrap_or_default()
+        ISimpleStorage::new(target).with_ctx(self).get().expect("Unable to get value")
     }
 }

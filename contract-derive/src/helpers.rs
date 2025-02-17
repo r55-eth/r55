@@ -505,7 +505,7 @@ pub fn rust_type_to_sol_type(ty: &Type) -> Result<DynSolType, &'static str> {
 fn to_camel_case(s: String) -> String {
     let mut result = String::new();
     let mut capitalize_next = false;
-    
+
     // Iterate through characters, skipping non-alphabetic separators
     for (i, c) in s.chars().enumerate() {
         if c.is_alphanumeric() {
@@ -579,8 +579,11 @@ mod tests {
     use super::*;
     use syn::parse_quote;
 
-    struct TestMethod { method: ImplItemMethod }
-    impl TestMethod {
+    struct MockMethod {
+        method: ImplItemMethod,
+    }
+
+    impl MockMethod {
         fn new(name: &str, args: Vec<&str>) -> Self {
             let name_ident = syn::Ident::new(name, proc_macro2::Span::call_site());
             let args_tokens = if args.is_empty() {
@@ -602,11 +605,13 @@ mod tests {
             Self { method }
         }
 
-        fn info(&self) -> MethodInfo { MethodInfo::from(self) }
+        fn info(&self) -> MethodInfo {
+            MethodInfo::from(self)
+        }
     }
 
-    impl<'a> From<&'a TestMethod> for MethodInfo<'a> {
-        fn from(test_method: &'a TestMethod) -> Self {
+    impl<'a> From<&'a MockMethod> for MethodInfo<'a> {
+        fn from(test_method: &'a MockMethod) -> Self {
             MethodInfo::from(&test_method.method)
         }
     }
@@ -764,21 +769,21 @@ mod tests {
     #[test]
     fn test_fn_selector() {
         // No arguments
-        let method = TestMethod::new("balance", vec![]);
+        let method = MockMethod::new("balance", vec![]);
         assert_eq!(
             generate_fn_selector(&method.info(), None).unwrap(),
             get_selector_from_sig("balance()"),
         );
 
         // Single argument
-        let method = TestMethod::new("transfer", vec!["to: Address"]);
+        let method = MockMethod::new("transfer", vec!["to: Address"]);
         assert_eq!(
             generate_fn_selector(&method.info(), None).unwrap(),
             get_selector_from_sig("transfer(address)"),
         );
 
         // Multiple arguments
-        let method = TestMethod::new(
+        let method = MockMethod::new(
             "transfer_from",
             vec!["from: Address", "to: Address", "amount: U256"],
         );
@@ -788,21 +793,24 @@ mod tests {
         );
 
         // Dynamic arrays
-        let method = TestMethod::new("batch_transfer", vec!["recipients: Vec<Address>"]);
+        let method = MockMethod::new("batch_transfer", vec!["recipients: Vec<Address>"]);
         assert_eq!(
             generate_fn_selector(&method.info(), None).unwrap(),
             get_selector_from_sig("batch_transfer(address[])")
         );
 
         // Tuples
-        let method = TestMethod::new("complex_transfer", vec!["data: (Address, U256)", "check: (Vec<Address>, Vec<Bool>)"]);
+        let method = MockMethod::new(
+            "complex_transfer",
+            vec!["data: (Address, U256)", "check: (Vec<Address>, Vec<Bool>)"],
+        );
         assert_eq!(
             generate_fn_selector(&method.info(), None).unwrap(),
             get_selector_from_sig("complex_transfer((address,uint256),(address[],bool[]))")
         );
 
         // Fixed arrays
-        let method = TestMethod::new("multi_transfer", vec!["amounts: [U256; 3]"]);
+        let method = MockMethod::new("multi_transfer", vec!["amounts: [U256; 3]"]);
         assert_eq!(
             generate_fn_selector(&method.info(), None).unwrap(),
             get_selector_from_sig("multi_transfer(uint256[3])")
@@ -811,13 +819,13 @@ mod tests {
 
     #[test]
     fn test_fn_selector_rename_camel_case() {
-        let method = TestMethod::new("get_balance", vec![]);
+        let method = MockMethod::new("get_balance", vec![]);
         assert_eq!(
             generate_fn_selector(&method.info(), Some(InterfaceNamingStyle::CamelCase)).unwrap(),
             get_selector_from_sig("getBalance()")
         );
 
-        let method = TestMethod::new("transfer_from_account", vec!["to: Address"]);
+        let method = MockMethod::new("transfer_from_account", vec!["to: Address"]);
         assert_eq!(
             generate_fn_selector(&method.info(), Some(InterfaceNamingStyle::CamelCase)).unwrap(),
             get_selector_from_sig("transferFromAccount(address)")
@@ -852,7 +860,7 @@ mod tests {
         ];
 
         for (name, args, signature) in cases {
-            let method = TestMethod::new(name, args);
+            let method = MockMethod::new(name, args);
             assert_eq!(
                 generate_fn_selector(&method.info(), None).unwrap(),
                 get_selector_from_sig(signature),
@@ -891,7 +899,7 @@ mod tests {
         ];
 
         for (name, args, signature) in cases {
-            let method = TestMethod::new(name, args);
+            let method = MockMethod::new(name, args);
             assert_eq!(
                 generate_fn_selector(&method.info(), None).unwrap(),
                 get_selector_from_sig(signature),

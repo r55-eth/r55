@@ -4,8 +4,8 @@ use alloy_sol_types::SolValue;
 use proc_macro::TokenStream;
 use quote::{format_ident, quote};
 use syn::{
-    parse_macro_input, Data, DeriveInput, Fields, ImplItem, ImplItemMethod, ItemImpl, ItemTrait,
-    ReturnType, TraitItem,
+    parse_macro_input, Data, DeriveInput, Fields, ImplItem, ImplItemMethod,
+    ItemImpl, ItemTrait, ReturnType, TraitItem,
 };
 
 mod helpers;
@@ -303,7 +303,11 @@ pub fn contract(_attr: TokenStream, item: TokenStream) -> TokenStream {
 
         // Check if there are payable methods
         let checks = if !is_payable(&method) {
-            quote! { if eth_riscv_runtime::msg_value() > U256::from(0) { panic!("Non-payable function"); } }
+            quote! {
+                if eth_riscv_runtime::msg_value() > U256::from(0) {
+                    panic!("Non-payable function");
+                }
+            }
         } else {
             quote! {}
         };
@@ -414,7 +418,11 @@ pub fn contract(_attr: TokenStream, item: TokenStream) -> TokenStream {
 
     // Generate the interface
     let interface_name = format_ident!("I{}", struct_name);
-    let interface = helpers::generate_interface(&public_methods, &interface_name, None);
+    let interface = helpers::generate_interface(
+        &public_methods,
+        &interface_name,
+        None,
+    );
 
     // Generate initcode for deployments
     let deployment_code = helpers::generate_deployment_code(struct_name, constructor);

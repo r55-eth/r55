@@ -3,9 +3,7 @@
 extern crate alloc;
 use alloc::vec::Vec;
 use alloy_core::primitives::{Address, Bytes, U256};
-use core::arch::asm;
-use core::cmp;
-use core::marker::PhantomData;
+use core::{arch::asm, marker::PhantomData};
 use eth_riscv_syscalls::Syscall;
 
 // Concrete types implementing the context traits
@@ -99,7 +97,7 @@ pub fn call(addr: Address, value: u64, data_offset: u64, data_size: u64) {
 }
 
 pub fn staticcall_contract(addr: Address, value: u64, data: &[u8], ret_size: Option<u64>) -> Bytes {
-    // Perform the staticcall without writting return data into (REVM) memory
+    // Perform the staticcall without writing return data into (REVM) memory
     staticcall(addr, value, data.as_ptr() as u64, data.len() as u64);
     // Load call output to memory
     handle_call_output(ret_size)

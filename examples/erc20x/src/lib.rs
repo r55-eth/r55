@@ -10,7 +10,7 @@ extern crate alloc;
 
 use erc20::{ERC20Error, IERC20};
 
-#[derive(Default)]
+#[derive(Default, )]
 pub struct ERC20x;
 
 #[contract]
