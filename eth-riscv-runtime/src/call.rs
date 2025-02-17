@@ -78,39 +78,11 @@ pub fn call_contract(
     value: u64,
     data: &[u8],
     ret_size: Option<u64>,
-) -> Option<Bytes> {
+) -> Bytes {
     // Perform the call without writing return data into (REVM) memory
     call(addr, value, data.as_ptr() as u64, data.len() as u64);
-
-    // Figure out return data size + initialize memory location
-    let ret_size = match ret_size {
-        Some(size) => size,
-        None => return_data_size(),
-    };
-
-    if ret_size == 0 {
-        return Some(Bytes::default());
-    };
-
-    let mut ret_data = Vec::with_capacity(ret_size as usize);
-    ret_data.resize(ret_size as usize, 0);
-
-    // Copy the return data from the interpreter's buffer
-    let (offset, chuncks, remainder) = (ret_data.as_ptr() as u64, ret_size / 32, ret_size % 32);
-
-    // handle full chunks
-    for i in 0..chunks {
-        let step = i * 32;
-        return_data_copy(offset + step, step, 32);
-    };
-
-    // handle potential last partial-chunk
-    if remainder != 0 {
-        let step = chunks * 32;
-        return_data_copy(offset + step, step, remainder);
-    };
-
-    Bytes::from(ret_data)
+    // Load call output to memory
+    handle_call_output(ret_size)
 }
 
 pub fn call(addr: Address, value: u64, data_offset: u64, data_size: u64) {
@@ -129,7 +101,11 @@ pub fn call(addr: Address, value: u64, data_offset: u64, data_size: u64) {
 pub fn staticcall_contract(addr: Address, value: u64, data: &[u8], ret_size: Option<u64>) -> Bytes {
     // Perform the staticcall without writting return data into (REVM) memory
     staticcall(addr, value, data.as_ptr() as u64, data.len() as u64);
+    // Load call output to memory
+    handle_call_output(ret_size)
+}
 
+fn handle_call_output(ret_size: Option<u64>) -> Bytes {
     // Figure out return data size + initialize memory location
     let ret_size = match ret_size {
         Some(size) => size,
@@ -137,14 +113,14 @@ pub fn staticcall_contract(addr: Address, value: u64, data: &[u8], ret_size: Opt
     };
   
     if ret_size == 0 {
-        return Some(Bytes::default());
+        return Bytes::default()
     };
 
     let mut ret_data = Vec::with_capacity(ret_size as usize);
     ret_data.resize(ret_size as usize, 0);
 
     // Copy the return data from the interpreter's buffer
-    let (offset, chuncks, remainder) = (ret_data.as_ptr() as u64, ret_size / 32, ret_size % 32);
+    let (offset, chunks, remainder) = (ret_data.as_ptr() as u64, ret_size / 32, ret_size % 32);
 
     // handle full chunks
     for i in 0..chunks {
