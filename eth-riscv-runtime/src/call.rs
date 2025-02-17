@@ -12,7 +12,7 @@ pub trait Contract {
 }
 
 pub fn call_contract(addr: Address, value: u64, data: &[u8], ret_size: Option<u64>) -> Option<Bytes> {
-    // Perform the call without writting return data into (REVM) memory
+    // Perform the call without writing return data into (REVM) memory
     call(addr, value, data.as_ptr() as u64, data.len() as u64);
 
     // Figure out return data size + initialize memory location
