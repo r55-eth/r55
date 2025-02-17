@@ -26,7 +26,7 @@ pub fn call_contract(addr: Address, value: u64, data: &[u8], ret_size: Option<u6
     ret_data.resize(ret_size as usize, 0);
 
     // Copy the return data from the interpreter's buffer
-    let (offset, chuncks) = (ret_data.as_ptr() as u64, ret_size / 32);
+    let (offset, chunks) = (ret_data.as_ptr() as u64, ret_size / 32);
     for i in 0..chuncks {
         let step = i * 32;
         return_data_copy(offset + step, step, 32)
