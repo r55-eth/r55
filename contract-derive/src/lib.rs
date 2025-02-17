@@ -342,10 +342,7 @@ pub fn interface(attr: TokenStream, item: TokenStream) -> TokenStream {
 
     // Generate intreface implementation
     let interface = helpers::generate_interface(&methods, trait_name, args.rename);
-
-    let output = quote! {
-        #interface
-    };
+    let output = quote! { #interface };
 
     TokenStream::from(output)
 }
