@@ -273,7 +273,10 @@ fn generate_method_impl(
                         None
                     );
 
-                    Some(<#return_ty>::abi_decode(&result, true).expect("Unable to decode"))
+                    match <#return_ty>::abi_decode(&result, true) {
+                        Ok(decoded) => Some(decoded),
+                        Err(_) => None
+                    }
                 }
             }
         }
@@ -297,7 +300,10 @@ fn generate_method_impl(
                         None
                     );
 
-                    Some(<#return_ty>::abi_decode(&result, true).expect("Unable to decode"))
+                    match <#return_ty>::abi_decode(&result, true) {
+                        Ok(decoded) => Some(decoded),
+                        Err(_) => None
+                    }
                 }
             }
         }
