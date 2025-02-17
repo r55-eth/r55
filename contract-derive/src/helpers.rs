@@ -1,3 +1,5 @@
+use std::error::Error;
+
 use alloy_core::primitives::keccak256;
 use alloy_dyn_abi::DynSolType;
 use proc_macro2::TokenStream;
@@ -503,7 +505,7 @@ pub fn rust_type_to_sol_type(ty: &Type) -> Result<DynSolType, &'static str> {
 fn to_camel_case(s: String) -> String {
     let mut result = String::new();
     let mut capitalize_next = false;
-
+    
     // Iterate through characters, skipping non-alphabetic separators
     for (i, c) in s.chars().enumerate() {
         if c.is_alphanumeric() {
