@@ -117,7 +117,7 @@ pub fn call(addr: Address, value: u64, data_offset: u64, data_size: u64) {
 }
 
 pub fn staticcall_contract(addr: Address, value: u64, data: &[u8], ret_size: Option<u64>) -> Option<Bytes> {
-    // Perform the staticcall without writting return data into (REVM) memory
+    // Perform the staticcall without writing return data into (REVM) memory
     staticcall(addr, value, data.as_ptr() as u64, data.len() as u64);
 
     // Figure out return data size + initialize memory location
