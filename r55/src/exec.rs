@@ -387,7 +387,7 @@ fn execute_riscv(
                         return Ok(InterpreterAction::Return {
                             result: InterpreterResult {
                                 result: InstructionResult::Revert,
-                                output: Bytes::from(data_bytes), //TODO: return revert(0,0)
+                                output: Bytes::from(data_bytes),
                                 gas: interpreter.gas,            // FIXME: gas is not correct
                             },
                         });
