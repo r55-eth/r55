@@ -109,54 +109,54 @@ where
     DB::Error: std::error::Error + 'static,
 {
     pub fn matches_string_error(&self, err: &'static str) -> bool {
-       if let Error::UnexpectedExecResult(ExecutionResult::Revert {
+        if let Error::UnexpectedExecResult(ExecutionResult::Revert {
             gas_used: _,
             output,
-        }) = &self {
+        }) = &self
+        {
             if &Bytes::from(err) != output {
-                return false
+                return false;
             }
 
             true
-        }
-         else {
+        } else {
             false
         }
     }
 
     pub fn matches_custom_error(&self, err: &'static str) -> bool {
-       if let Error::UnexpectedExecResult(ExecutionResult::Revert {
+        if let Error::UnexpectedExecResult(ExecutionResult::Revert {
             gas_used: _,
             output,
-        }) = &self {
-            if Bytes::from(keccak256(err)[..4].to_vec()) != output[..4] {
-                return false
+        }) = &self
+        {
+            if keccak256(err)[..4].to_vec() != output[..4] {
+                return false;
             }
 
             true
-        }
-         else {
+        } else {
             false
         }
     }
 
     pub fn matches_custom_error_with_args(&self, err: &'static str, args: Vec<u8>) -> bool {
-       if let Error::UnexpectedExecResult(ExecutionResult::Revert {
+        if let Error::UnexpectedExecResult(ExecutionResult::Revert {
             gas_used: _,
             output,
-        }) = &self {
+        }) = &self
+        {
             let err = Bytes::from(keccak256(err)[..4].to_vec());
             if err != output[..4] {
-                return false
+                return false;
             }
 
             if !args.is_empty() && output[4..].to_vec() != args {
-                return false
+                return false;
             }
 
             true
-        }
-         else {
+        } else {
             false
         }
     }

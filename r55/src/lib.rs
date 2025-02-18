@@ -114,7 +114,6 @@ where
 
 #[cfg(test)]
 mod tests {
-    use crate::error::Error;
     use crate::exec::{deploy_contract, run_tx};
     use crate::{compile_deploy, compile_with_prefix, test_utils::*};
 
@@ -122,7 +121,6 @@ mod tests {
     use alloy_core::primitives::address;
     use alloy_primitives::B256;
     use alloy_sol_types::SolValue;
-    use revm::primitives::ExecutionResult;
 
     const ERC20_PATH: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/../examples/erc20");
     const ERC20X_PATH: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/../examples/erc20x");
@@ -474,10 +472,10 @@ mod tests {
         // Attempt mint with Bob (not contract owner)
         let only_owner_result = run_tx(&mut db, &erc20, complete_mint_calldata, &bob)
             .expect_err("Mint transaction succeeded");
-            assert!(
-                only_owner_result.matches_custom_error("ERC20Error::OnlyOwner"),
-                "Incorrect error"
-            );
+        assert!(
+            only_owner_result.matches_custom_error("ERC20Error::OnlyOwner"),
+            "Incorrect error"
+        );
 
         // Attempt transfer 43 tokens (more than her balance) from Alice to Bob
         let value_transfer = U256::from(43e18);
@@ -489,11 +487,13 @@ mod tests {
         let insufficient_balance_result =
             run_tx(&mut db, &erc20, complete_calldata_transfer.clone(), &alice)
                 .expect_err("Transfer transaction succeeded");
-            assert!(
-               insufficient_balance_result.matches_custom_error_with_args(
-                "ERC20Error::InsufficientBalance(uint256)", value_mint.abi_encode()),
-                "Incorrect error signature"
-            );
+        assert!(
+            insufficient_balance_result.matches_custom_error_with_args(
+                "ERC20Error::InsufficientBalance(uint256)",
+                value_mint.abi_encode()
+            ),
+            "Incorrect error signature"
+        );
 
         // Approve Carol to spend 10 tokens from Alice
         let value_approve = U256::from(10e18);
@@ -518,11 +518,13 @@ mod tests {
             &carol,
         )
         .expect_err("Transfer From tx succeeded");
-            assert!(
-               insufficient_allowance_result.matches_custom_error_with_args(
-                "ERC20Error::InsufficientAllowance(uint256)", value_approve.abi_encode()),
-                "Incorrect error signature"
-            );
+        assert!(
+            insufficient_allowance_result.matches_custom_error_with_args(
+                "ERC20Error::InsufficientAllowance(uint256)",
+                value_approve.abi_encode()
+            ),
+            "Incorrect error signature"
+        );
     }
 
     #[test]
