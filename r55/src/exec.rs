@@ -388,7 +388,7 @@ fn execute_riscv(
                             result: InterpreterResult {
                                 result: InstructionResult::Revert,
                                 output: Bytes::from(data_bytes),
-                                gas: interpreter.gas,            // FIXME: gas is not correct
+                                gas: interpreter.gas, // FIXME: gas is not correct
                             },
                         });
                     }

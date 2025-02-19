@@ -2,6 +2,7 @@
 
 use core::fmt;
 
+use alloy_primitives::{keccak256, Bytes};
 use revm::{
     primitives::{EVMError, ExecutionResult, Log},
     Database, InMemoryDB,
@@ -99,6 +100,64 @@ where
                 "Unexpected result of the transaction execution: {:?}",
                 other
             ),
+        }
+    }
+}
+
+impl<DB: Database> Error<DB>
+where
+    DB::Error: std::error::Error + 'static,
+{
+    pub fn matches_string_error(&self, err: &'static str) -> bool {
+        if let Error::UnexpectedExecResult(ExecutionResult::Revert {
+            gas_used: _,
+            output,
+        }) = &self
+        {
+            if &Bytes::from(err) != output {
+                return false;
+            }
+
+            true
+        } else {
+            false
+        }
+    }
+
+    pub fn matches_custom_error(&self, err: &'static str) -> bool {
+        if let Error::UnexpectedExecResult(ExecutionResult::Revert {
+            gas_used: _,
+            output,
+        }) = &self
+        {
+            if keccak256(err)[..4].to_vec() != output[..4] {
+                return false;
+            }
+
+            true
+        } else {
+            false
+        }
+    }
+
+    pub fn matches_custom_error_with_args(&self, err: &'static str, args: Vec<u8>) -> bool {
+        if let Error::UnexpectedExecResult(ExecutionResult::Revert {
+            gas_used: _,
+            output,
+        }) = &self
+        {
+            let err = Bytes::from(keccak256(err)[..4].to_vec());
+            if err != output[..4] {
+                return false;
+            }
+
+            if !args.is_empty() && output[4..].to_vec() != args {
+                return false;
+            }
+
+            true
+        } else {
+            false
         }
     }
 }

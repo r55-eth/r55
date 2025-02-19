@@ -114,7 +114,6 @@ where
 
 #[cfg(test)]
 mod tests {
-    use crate::error::Error;
     use crate::exec::{deploy_contract, run_tx};
     use crate::{compile_deploy, compile_with_prefix, test_utils::*};
 
@@ -122,7 +121,6 @@ mod tests {
     use alloy_core::primitives::address;
     use alloy_primitives::B256;
     use alloy_sol_types::SolValue;
-    use revm::primitives::ExecutionResult;
 
     const ERC20_PATH: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/../examples/erc20");
     const ERC20X_PATH: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/../examples/erc20x");
@@ -474,17 +472,10 @@ mod tests {
         // Attempt mint with Bob (not contract owner)
         let only_owner_result = run_tx(&mut db, &erc20, complete_mint_calldata, &bob)
             .expect_err("Mint transaction succeeded");
-        if let Error::UnexpectedExecResult(ExecutionResult::Revert {
-            gas_used: _,
-            output,
-        }) = only_owner_result
-        {
-            assert_eq!(
-                output,
-                Bytes::from(keccak256("ERC20Error::OnlyOwner")[..4].to_vec()),
-                "Incorrect error"
-            );
-        };
+        assert!(
+            only_owner_result.matches_custom_error("ERC20Error::OnlyOwner"),
+            "Incorrect error"
+        );
 
         // Attempt transfer 43 tokens (more than her balance) from Alice to Bob
         let value_transfer = U256::from(43e18);
@@ -496,22 +487,13 @@ mod tests {
         let insufficient_balance_result =
             run_tx(&mut db, &erc20, complete_calldata_transfer.clone(), &alice)
                 .expect_err("Transfer transaction succeeded");
-        if let Error::UnexpectedExecResult(ExecutionResult::Revert {
-            gas_used: _,
-            output,
-        }) = insufficient_balance_result
-        {
-            assert_eq!(
-                Bytes::from(output.clone()[..4].to_vec()),
-                Bytes::from(keccak256("ERC20Error::InsufficientBalance(uint256)")[..4].to_vec()),
-                "Incorrect error signature"
-            );
-            assert_eq!(
-                U256::from_be_bytes::<32>(output[4..].try_into().unwrap()),
-                value_mint,
-                "Incorrect error param encoding"
-            );
-        };
+        assert!(
+            insufficient_balance_result.matches_custom_error_with_args(
+                "ERC20Error::InsufficientBalance(uint256)",
+                value_mint.abi_encode()
+            ),
+            "Incorrect error signature"
+        );
 
         // Approve Carol to spend 10 tokens from Alice
         let value_approve = U256::from(10e18);
@@ -536,22 +518,13 @@ mod tests {
             &carol,
         )
         .expect_err("Transfer From tx succeeded");
-        if let Error::UnexpectedExecResult(ExecutionResult::Revert {
-            gas_used: _,
-            output,
-        }) = insufficient_allowance_result
-        {
-            assert_eq!(
-                Bytes::from(output.clone()[..4].to_vec()),
-                Bytes::from(keccak256("ERC20Error::InsufficientAllowance(uint256)")[..4].to_vec()),
-                "Incorrect error signature"
-            );
-            assert_eq!(
-                U256::from_be_bytes::<32>(output[4..].try_into().unwrap()),
-                value_approve,
-                "Incorrect error param encoding"
-            );
-        };
+        assert!(
+            insufficient_allowance_result.matches_custom_error_with_args(
+                "ERC20Error::InsufficientAllowance(uint256)",
+                value_approve.abi_encode()
+            ),
+            "Incorrect error signature"
+        );
     }
 
     #[test]
@@ -601,17 +574,10 @@ mod tests {
 
         let only_owner_result = run_tx(&mut db, &erc20x, complete_x_mint_calldata, &bob)
             .expect_err("Mint transaction succeeded");
-        if let Error::UnexpectedExecResult(ExecutionResult::Revert {
-            gas_used: _,
-            output,
-        }) = only_owner_result
-        {
-            assert_eq!(
-                output,
-                Bytes::from(keccak256("ERC20Error::OnlyOwner")[..4].to_vec()),
-                "Incorrect error"
-            );
-        };
+        assert!(
+            only_owner_result.matches_custom_error("ERC20Error::OnlyOwner"),
+            "Incorrect error"
+        );
 
         // Attempt cross-transfer 100 tokens (without allowance) from Alice to Bob
         let mut calldata_x_transfer_from = (alice, value_x_steal, erc20).abi_encode();
@@ -625,17 +591,10 @@ mod tests {
             &bob,
         )
         .expect_err("Transfer transaction succeeded");
-        if let Error::UnexpectedExecResult(ExecutionResult::Revert {
-            gas_used: _,
-            output,
-        }) = zero_amount_result
-        {
-            assert_eq!(
-                output,
-                Bytes::from(keccak256("ERC20Error::ZeroAmount")[..4].to_vec()),
-                "Incorrect error signature"
-            );
-        };
+        assert!(
+            zero_amount_result.matches_custom_error("ERC20Error::ZeroAmount"),
+            "Incorrect error signature"
+        );
 
         // Approve ERC20x to spend 10 tokens from Alice
         let value_approve = U256::from(10e18);
@@ -674,7 +633,7 @@ mod tests {
     }
 
     #[test]
-    fn test_string_error_handling_in_contract_calls() {
+    fn test_string_error() {
         initialize_logger();
 
         let mut db = InMemoryDB::default();
@@ -700,17 +659,10 @@ mod tests {
         // Attempt a call that panics with a string msg
         let panic_result =
             run_tx(&mut db, &erc20x, selector_panic.to_vec(), &alice).expect_err("Tx succeeded");
-        if let Error::UnexpectedExecResult(ExecutionResult::Revert {
-            gas_used: _,
-            output,
-        }) = panic_result
-        {
-            assert_eq!(
-                output,
-                Bytes::from("This function always panics"),
-                "Incorrect error"
-            );
-        };
+        assert!(
+            panic_result.matches_string_error("This function always panics"),
+            "Incorrect error"
+        );
 
         // Attempt a call that panics with a string msg
         let mut calldata_x_mint = (alice, U256::from(1e18), erc20).abi_encode();
@@ -719,16 +671,9 @@ mod tests {
         let x_mint_panic_result =
             run_tx(&mut db, &erc20x, complete_x_mint_calldata.to_vec(), &alice)
                 .expect_err("Tx succeeded");
-        if let Error::UnexpectedExecResult(ExecutionResult::Revert {
-            gas_used: _,
-            output,
-        }) = x_mint_panic_result
-        {
-            assert_eq!(
-                output,
-                Bytes::from("ERC20::mint() failed!: OnlyOwner"),
-                "Incorrect error"
-            );
-        };
+        assert!(
+            x_mint_panic_result.matches_string_error("ERC20::mint() failed!: OnlyOwner"),
+            "Incorrect error"
+        );
     }
 }
