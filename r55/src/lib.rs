@@ -118,7 +118,6 @@ mod tests {
     use crate::{compile_deploy, compile_with_prefix, test_utils::*};
 
     use alloy_core::hex::{self, ToHexExt};
-    use alloy_core::primitives::address;
     use alloy_primitives::B256;
     use alloy_sol_types::SolValue;
 
@@ -128,26 +127,24 @@ mod tests {
     fn setup_erc20(owner: Address) -> (InMemoryDB, Address) {
         initialize_logger();
         let mut db = InMemoryDB::default();
-        
+
         // Fund user accounts with some ETH
-        for user in [ALICE, BOB, CAROL] { 
+        for user in [ALICE, BOB, CAROL] {
             add_balance_to_db(&mut db, user, 1e18 as u64);
         }
-        
+
         // Deploy contract
         let constructor = owner.abi_encode();
         let bytecode = compile_with_prefix(compile_deploy, ERC20_PATH).unwrap();
         let erc20 = deploy_contract(&mut db, bytecode, Some(constructor)).unwrap();
-        
+
         (db, erc20)
     }
 
     fn setup_erc20x(db: &mut InMemoryDB) -> Address {
         // Deploy contract
         let bytecode = compile_with_prefix(compile_deploy, ERC20X_PATH).unwrap();
-        let erc20x = deploy_contract(db, bytecode, None).unwrap();
-        
-        erc20x
+        deploy_contract(db, bytecode, None).unwrap()
     }
 
     #[test]
@@ -164,9 +161,14 @@ mod tests {
         let selector_allowance = get_selector_from_sig("allowance(address,address)");
 
         // Check that Alice is the contract owner
-        let owner_result = run_tx(&mut db, &erc20, get_calldata(selector_owner, vec![]), &ALICE)
-            .expect("Error executing tx")
-            .output;
+        let owner_result = run_tx(
+            &mut db,
+            &erc20,
+            get_calldata(selector_owner, vec![]),
+            &ALICE,
+        )
+        .expect("Error executing tx")
+        .output;
 
         assert_eq!(
             B256::from_slice(owner_result.as_slice()),
@@ -182,9 +184,14 @@ mod tests {
         assert!(mint_result.status, "Mint transaction failed");
 
         // Check total supply
-        let total_supply_result = run_tx(&mut db, &erc20, get_calldata(selector_total_supply, vec![]), &ALICE)
-            .expect("Error executing tx")
-            .output;
+        let total_supply_result = run_tx(
+            &mut db,
+            &erc20,
+            get_calldata(selector_total_supply, vec![]),
+            &ALICE,
+        )
+        .expect("Error executing tx")
+        .output;
 
         assert_eq!(
             U256::from_be_bytes::<32>(total_supply_result.as_slice().try_into().unwrap()),
@@ -194,14 +201,9 @@ mod tests {
 
         // Check Alice's balance
         let calldata_alice_balance = get_calldata(selector_balance, ALICE.abi_encode());
-        let alice_balance_result = run_tx(
-            &mut db,
-            &erc20,
-            calldata_alice_balance.clone(),
-            &ALICE,
-        )
-        .expect("Error executing tx")
-        .output;
+        let alice_balance_result = run_tx(&mut db, &erc20, calldata_alice_balance.clone(), &ALICE)
+            .expect("Error executing tx")
+            .output;
 
         assert_eq!(
             U256::from_be_bytes::<32>(alice_balance_result.as_slice().try_into().unwrap()),
@@ -212,19 +214,13 @@ mod tests {
         // Transfer 21 tokens from Alice to Bob
         let value_transfer = U256::from(21e18);
         let calldata_transfer = get_calldata(selector_transfer, (BOB, value_transfer).abi_encode());
-        let transfer_result =
-            run_tx(&mut db, &erc20, calldata_transfer.clone(), &ALICE).unwrap();
+        let transfer_result = run_tx(&mut db, &erc20, calldata_transfer.clone(), &ALICE).unwrap();
         assert!(transfer_result.status, "Transfer transaction failed");
 
         // Check Alice's balance
-        let alice_balance_result = run_tx(
-            &mut db,
-            &erc20,
-            calldata_alice_balance.clone(),
-            &ALICE,
-        )
-        .expect("Error executing tx")
-        .output;
+        let alice_balance_result = run_tx(&mut db, &erc20, calldata_alice_balance.clone(), &ALICE)
+            .expect("Error executing tx")
+            .output;
 
         assert_eq!(
             U256::from_be_bytes::<32>(alice_balance_result.as_slice().try_into().unwrap()),
@@ -234,14 +230,9 @@ mod tests {
 
         // Check Bob's balance
         let calldata_bob_balance = get_calldata(selector_balance, BOB.abi_encode());
-        let bob_balance_result = run_tx(
-            &mut db,
-            &erc20,
-            calldata_bob_balance.clone(),
-            &ALICE,
-        )
-        .expect("Error executing tx")
-        .output;
+        let bob_balance_result = run_tx(&mut db, &erc20, calldata_bob_balance.clone(), &ALICE)
+            .expect("Error executing tx")
+            .output;
 
         assert_eq!(
             U256::from_be_bytes::<32>(bob_balance_result.as_slice().try_into().unwrap()),
@@ -252,16 +243,14 @@ mod tests {
         // Approve Carol to spend 10 tokens from Alice
         let value_approve = U256::from(10e18);
         let calldata_approve = get_calldata(selector_approve, (CAROL, value_approve).abi_encode());
-        let approve_result =
-            run_tx(&mut db, &erc20, calldata_approve.clone(), &ALICE).unwrap();
+        let approve_result = run_tx(&mut db, &erc20, calldata_approve.clone(), &ALICE).unwrap();
         assert!(approve_result.status, "Approve transaction failed");
 
         // Check Carol's allowance
         let calldata_allowance = get_calldata(selector_allowance, (ALICE, CAROL).abi_encode());
-        let carol_allowance_result =
-            run_tx(&mut db, &erc20, calldata_allowance.clone(), &ALICE)
-                .expect("Error executing tx")
-                .output;
+        let carol_allowance_result = run_tx(&mut db, &erc20, calldata_allowance.clone(), &ALICE)
+            .expect("Error executing tx")
+            .output;
 
         assert_eq!(
             U256::from_be_bytes::<32>(carol_allowance_result.as_slice().try_into().unwrap()),
@@ -328,7 +317,7 @@ mod tests {
 
     #[test]
     fn test_storage_layout() {
-         let (mut db, erc20) = setup_erc20(ALICE);
+        let (mut db, erc20) = setup_erc20(ALICE);
 
         // Mint tokens to Alice
         let mint_alice = U256::from(10e18);
@@ -348,7 +337,8 @@ mod tests {
         // Approve Carol to spend 10 tokens from Alice
         let allowance_carol = U256::from(5e18);
         let selector_approve = get_selector_from_sig("approve(address,uint256)");
-        let calldata_approve = get_calldata(selector_approve, (CAROL, allowance_carol).abi_encode());
+        let calldata_approve =
+            get_calldata(selector_approve, (CAROL, allowance_carol).abi_encode());
         let approve_result = run_tx(&mut db, &erc20, calldata_approve, &ALICE).unwrap();
         assert!(approve_result.status, "Approve transaction failed");
 
@@ -393,13 +383,14 @@ mod tests {
 
     #[test]
     fn test_custom_error() {
-         let (mut db, erc20) = setup_erc20(ALICE);
+        let (mut db, erc20) = setup_erc20(ALICE);
 
         // Define fn selectors
         let selector_mint = get_selector_from_sig("mint(address,uint256)");
         let selector_approve = get_selector_from_sig("approve(address,uint256)");
         let selector_transfer = get_selector_from_sig("transfer(address,uint256)");
-        let selector_transfer_from = get_selector_from_sig("transfer_from(address,address,uint256)");
+        let selector_transfer_from =
+            get_selector_from_sig("transfer_from(address,address,uint256)");
 
         // Mint 42 tokens to Alice
         let value_mint = U256::from(42e18);
@@ -409,8 +400,8 @@ mod tests {
         assert!(mint_result.status, "Mint transaction failed");
 
         // Attempt mint with Bob (not contract owner)
-        let only_owner_result = run_tx(&mut db, &erc20, calldata_mint, &BOB)
-            .expect_err("Mint transaction succeeded");
+        let only_owner_result =
+            run_tx(&mut db, &erc20, calldata_mint, &BOB).expect_err("Mint transaction succeeded");
         assert!(
             only_owner_result.matches_custom_error("ERC20Error::OnlyOwner"),
             "Incorrect error"
@@ -436,24 +427,19 @@ mod tests {
         let value_approve = U256::from(10e18);
         let calldata_approve = get_calldata(selector_approve, (CAROL, value_approve).abi_encode());
 
-        let approve_result =
-            run_tx(&mut db, &erc20, calldata_approve.clone(), &ALICE).unwrap();
+        let approve_result = run_tx(&mut db, &erc20, calldata_approve.clone(), &ALICE).unwrap();
         assert!(approve_result.status, "Approve transaction failed");
 
         // Attempt transfer_from of all tokens (more than allowance) from Alice to Carol
         let calldata_transfer_from = get_calldata(
             selector_transfer_from,
-            (ALICE, CAROL, value_mint).abi_encode()
+            (ALICE, CAROL, value_mint).abi_encode(),
         );
 
         assert!(value_mint > value_approve);
-        let insufficient_allowance_result = run_tx(
-            &mut db,
-            &erc20,
-            calldata_transfer_from.clone(),
-            &CAROL,
-        )
-            .expect_err("Transfer From tx succeeded");
+        let insufficient_allowance_result =
+            run_tx(&mut db, &erc20, calldata_transfer_from.clone(), &CAROL)
+                .expect_err("Transfer From tx succeeded");
         assert!(
             insufficient_allowance_result.matches_custom_error_with_args(
                 "ERC20Error::InsufficientAllowance(uint256)",
@@ -473,7 +459,8 @@ mod tests {
         let selector_x_mint = get_selector_from_sig("x_mint(address,uint256,address)");
         let selector_approve = get_selector_from_sig("approve(address,uint256)");
         let selector_balance_of = get_selector_from_sig("balance_of(address)");
-        let selector_x_transfer_from = get_selector_from_sig("x_transfer_from(address,uint256,address)");
+        let selector_x_transfer_from =
+            get_selector_from_sig("x_transfer_from(address,uint256,address)");
 
         // Mint 42 tokens to Alice
         let value_mint = U256::from(42e18);
@@ -484,10 +471,8 @@ mod tests {
 
         // Attempt to cross-mint 100 tokens to Bob (erc20x is not the contract owner)
         let value_x_steal = U256::from(100e18);
-        let calldata_x_mint = get_calldata(
-            selector_x_mint,
-            (BOB, value_x_steal, erc20).abi_encode()
-        );
+        let calldata_x_mint =
+            get_calldata(selector_x_mint, (BOB, value_x_steal, erc20).abi_encode());
 
         let only_owner_result = run_tx(&mut db, &erc20x, calldata_x_mint, &BOB)
             .expect_err("Mint transaction succeeded");
@@ -499,16 +484,11 @@ mod tests {
         // Attempt cross-transfer 100 tokens (without allowance) from Alice to Bob
         let calldata_x_transfer_from = get_calldata(
             selector_x_transfer_from,
-            (ALICE, value_x_steal, erc20).abi_encode()
+            (ALICE, value_x_steal, erc20).abi_encode(),
         );
 
-        let zero_amount_result = run_tx(
-            &mut db,
-            &erc20x,
-            calldata_x_transfer_from.clone(),
-            &BOB,
-        )
-        .expect_err("Transfer transaction succeeded");
+        let zero_amount_result = run_tx(&mut db, &erc20x, calldata_x_transfer_from.clone(), &BOB)
+            .expect_err("Transfer transaction succeeded");
         assert!(
             zero_amount_result.matches_custom_error("ERC20Error::ZeroAmount"),
             "Incorrect error signature"
@@ -518,14 +498,12 @@ mod tests {
         let value_approve = U256::from(10e18);
         let calldata_approve = get_calldata(selector_approve, (erc20x, value_approve).abi_encode());
 
-        let approve_result =
-            run_tx(&mut db, &erc20, calldata_approve.clone(), &ALICE).unwrap();
+        let approve_result = run_tx(&mut db, &erc20, calldata_approve.clone(), &ALICE).unwrap();
         assert!(approve_result.status, "Approve transaction failed");
 
         // Attempt cross-transfer 100 tokens (with a 10 token allowance) from Alice to Bob
         let fallback_x_transfer_result =
-            run_tx(&mut db, &erc20x, calldata_x_transfer_from, &BOB)
-                .expect("Error executing tx");
+            run_tx(&mut db, &erc20x, calldata_x_transfer_from, &BOB).expect("Error executing tx");
         assert!(
             fallback_x_transfer_result.status,
             "Cross-transfer from transaction failed"
@@ -534,10 +512,9 @@ mod tests {
         // Check Bob's balance
         let calldata_balance_of = get_calldata(selector_balance_of, BOB.abi_encode());
 
-        let bob_balance_result =
-            run_tx(&mut db, &erc20, calldata_balance_of.clone(), &BOB)
-                .expect("Error executing tx")
-                .output;
+        let bob_balance_result = run_tx(&mut db, &erc20, calldata_balance_of.clone(), &BOB)
+            .expect("Error executing tx")
+            .output;
 
         assert_eq!(
             U256::from_be_bytes::<32>(bob_balance_result.as_slice().try_into().unwrap()),
@@ -556,9 +533,13 @@ mod tests {
         let selector_x_mint_panic = get_selector_from_sig("x_mint_panics(address,uint256,address)");
 
         // Attempt a call that panics with a string msg
-        let panic_result =
-            run_tx(&mut db, &erc20x, get_calldata(selector_panic, vec![]), &ALICE)
-                .expect_err("Tx succeeded");
+        let panic_result = run_tx(
+            &mut db,
+            &erc20x,
+            get_calldata(selector_panic, vec![]),
+            &ALICE,
+        )
+        .expect_err("Tx succeeded");
         assert!(
             panic_result.matches_string_error("This function always panics"),
             "Incorrect error"
@@ -567,12 +548,11 @@ mod tests {
         // Attempt a call that panics with a string msg
         let calldata_x_mint = get_calldata(
             selector_x_mint_panic,
-            (ALICE, U256::from(1e18), erc20).abi_encode()
+            (ALICE, U256::from(1e18), erc20).abi_encode(),
         );
-        
+
         let x_mint_panic_result =
-            run_tx(&mut db, &erc20x, calldata_x_mint, &ALICE)
-                .expect_err("Tx succeeded");
+            run_tx(&mut db, &erc20x, calldata_x_mint, &ALICE).expect_err("Tx succeeded");
         assert!(
             x_mint_panic_result.matches_string_error("ERC20::mint() failed!: OnlyOwner"),
             "Incorrect error"

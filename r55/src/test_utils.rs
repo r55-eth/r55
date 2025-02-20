@@ -53,7 +53,6 @@ pub fn get_calldata(selector: [u8; 4], mut args: Vec<u8>) -> Vec<u8> {
     calldata
 }
 
-
 pub fn get_mapping_slot(key_bytes: Vec<u8>, id: U256) -> U256 {
     let mut data_bytes = Vec::with_capacity(64);
     data_bytes.extend_from_slice(&key_bytes);
