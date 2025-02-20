@@ -498,12 +498,17 @@ fn execute_riscv(
                         let topics_size: u64 = emu.cpu.xregs.read(13);
 
                         // Read data
-                        let data_slice = emu
-                            .cpu
-                            .bus
-                            .get_dram_slice(data_ptr..(data_ptr + data_size))
-                            .unwrap_or(&mut []);
-                        let data = data_slice.to_vec();
+                        let data = if data_size == 0 {
+                            Vec::new()
+                        } else {
+                            let data_slice = emu
+                                .cpu
+                                .bus
+                                .get_dram_slice(data_ptr..(data_ptr + data_size))
+                                .unwrap_or(&mut []);
+                            data_slice.to_vec()
+                        };
+                        trace!("> LOGS [DATA]: {:?}", Bytes::from(data.clone()));
 
                         // Read topics
                         let topics_start = topics_ptr;
@@ -517,6 +522,7 @@ fn execute_riscv(
                             .chunks(32)
                             .map(B256::from_slice)
                             .collect::<Vec<B256>>();
+                        trace!("> LOGS [TOPICS]: {:#?}", &topics);
 
                         host.log(Log::new_unchecked(
                             interpreter.contract.target_address,
