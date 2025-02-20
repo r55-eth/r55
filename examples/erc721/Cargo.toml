@@ -1,0 +1,31 @@
+[package]
+name = "erc721"
+version = "0.1.0"
+edition = "2021"
+
+[workspace]
+
+[features]
+default = []
+deploy = []
+interface-only = []
+
+[dependencies]
+contract-derive = { path = "../../contract-derive" }
+eth-riscv-runtime = { path = "../../eth-riscv-runtime" }
+
+alloy-core = { version = "0.8.20", default-features = false }
+alloy-sol-types = { version = "0.8.20", default-features = false }
+
+[[bin]]
+name = "runtime"
+path = "src/lib.rs"
+
+[[bin]]
+name = "deploy"
+path = "src/lib.rs"
+required-features = ["deploy"]
+
+[profile.release]
+lto = true
+opt-level = "z"
