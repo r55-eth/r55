@@ -4,7 +4,7 @@
 use core::default::Default;
 
 use contract_derive::{contract, payable, storage, Event, Error};
-use eth_riscv_runtime::{msg_sender, types::*};
+use eth_riscv_runtime::types::*;
 
 use alloy_core::primitives::{address, Address, Bytes, U256};
 
