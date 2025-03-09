@@ -1,0 +1,8 @@
+[target.riscv64imac-unknown-none-elf]
+rustflags = [
+  "-C", "link-arg=-T/Users/rusowsky/dev/the-lab/r55/r5-rust-rt.x",
+  "-C", "llvm-args=--inline-threshold=275"
+]
+
+[build]
+target = "riscv64imac-unknown-none-elf"

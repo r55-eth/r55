@@ -1,7 +1,7 @@
 use alloy_primitives::{Address, B256, U256};
 use alloy_sol_types::SolValue;
 use r55::{
-    compile_deploy, compile_with_prefix,
+    get_bytecode,
     exec::{deploy_contract, run_tx},
     test_utils::{
         add_balance_to_db, get_calldata, get_selector_from_sig, initialize_logger, ALICE, BOB,
@@ -9,8 +9,6 @@ use r55::{
     },
 };
 use revm::InMemoryDB;
-
-const ERC721_PATH: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/../examples/erc721");
 
 struct ERC721Setup {
     db: InMemoryDB,
@@ -29,7 +27,7 @@ fn erc721_setup(owner: Address) -> ERC721Setup {
 
     // Deploy contract
     let constructor = owner.abi_encode();
-    let bytecode = compile_with_prefix(compile_deploy, ERC721_PATH).unwrap();
+    let bytecode = get_bytecode("erc721");
     let token = deploy_contract(&mut db, bytecode, Some(constructor)).unwrap();
 
     ERC721Setup { db, token, owner }

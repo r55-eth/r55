@@ -1,128 +1,19 @@
 pub mod exec;
-
 mod error;
 mod gas;
 
+mod generated;
+pub use generated::get_bytecode;
+
 pub mod test_utils;
-
-use alloy_primitives::Bytes;
-use std::fs::File;
-use std::io::Read;
-use std::process::Command;
-use tracing::{error, info};
-
-fn compile_runtime(path: &str) -> eyre::Result<Vec<u8>> {
-    info!("Compiling runtime: {}", path);
-    let status = Command::new("cargo")
-        .arg("+nightly-2025-01-07")
-        .arg("build")
-        .arg("-r")
-        .arg("--lib")
-        .arg("-Z")
-        .arg("build-std=core,alloc")
-        .arg("--target")
-        .arg("riscv64imac-unknown-none-elf")
-        .arg("--bin")
-        .arg("runtime")
-        .current_dir(path)
-        .status()
-        .expect("Failed to execute cargo command");
-
-    if !status.success() {
-        error!("Cargo command failed with status: {}", status);
-        std::process::exit(1);
-    } else {
-        info!("Cargo command completed successfully");
-    }
-
-    let path = format!(
-        "{}/target/riscv64imac-unknown-none-elf/release/runtime",
-        path
-    );
-    let mut file = match File::open(path) {
-        Ok(file) => file,
-        Err(e) => {
-            eyre::bail!("Failed to open file: {}", e);
-        }
-    };
-
-    // Read the file contents into a vector.
-    let mut bytecode = Vec::new();
-    if let Err(e) = file.read_to_end(&mut bytecode) {
-        eyre::bail!("Failed to read file: {}", e);
-    }
-
-    Ok(bytecode)
-}
-
-pub fn compile_deploy(path: &str) -> eyre::Result<Vec<u8>> {
-    compile_runtime(path)?;
-    info!("Compiling deploy: {}", path);
-    let status = Command::new("cargo")
-        .arg("+nightly-2025-01-07")
-        .arg("build")
-        .arg("-r")
-        .arg("--lib")
-        .arg("-Z")
-        .arg("build-std=core,alloc")
-        .arg("--target")
-        .arg("riscv64imac-unknown-none-elf")
-        .arg("--bin")
-        .arg("deploy")
-        .arg("--features")
-        .arg("deploy")
-        .current_dir(path)
-        .status()
-        .expect("Failed to execute cargo command");
-
-    if !status.success() {
-        error!("Cargo command failed with status: {}", status);
-        std::process::exit(1);
-    } else {
-        info!("Cargo command completed successfully");
-    }
-
-    let path = format!(
-        "{}/target/riscv64imac-unknown-none-elf/release/deploy",
-        path
-    );
-    let mut file = match File::open(path) {
-        Ok(file) => file,
-        Err(e) => {
-            eyre::bail!("Failed to open file: {}", e);
-        }
-    };
-
-    // Read the file contents into a vector.
-    let mut bytecode = Vec::new();
-    if let Err(e) = file.read_to_end(&mut bytecode) {
-        eyre::bail!("Failed to read file: {}", e);
-    }
-
-    Ok(bytecode)
-}
-
-pub fn compile_with_prefix<F>(compile_fn: F, path: &str) -> eyre::Result<Bytes>
-where
-    F: FnOnce(&str) -> eyre::Result<Vec<u8>>,
-{
-    let bytecode = compile_fn(path)?;
-    let mut prefixed_bytecode = vec![0xff]; // Add the 0xff prefix
-    prefixed_bytecode.extend_from_slice(&bytecode);
-    Ok(Bytes::from(prefixed_bytecode))
-}
 
 #[cfg(test)]
 mod tests {
-    use crate::exec::{deploy_contract, run_tx};
-    use crate::{compile_deploy, compile_with_prefix, test_utils::*};
+    use crate::{get_bytecode, test_utils::*, exec::{deploy_contract, run_tx}};
 
     use alloy_core::hex::{self, ToHexExt};
     use alloy_primitives::B256;
     use alloy_sol_types::SolValue;
-
-    const ERC20_PATH: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/../examples/erc20");
-    const ERC20X_PATH: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/../examples/erc20x");
 
     fn setup_erc20(owner: Address) -> (InMemoryDB, Address) {
         initialize_logger();
@@ -135,7 +26,7 @@ mod tests {
 
         // Deploy contract
         let constructor = owner.abi_encode();
-        let bytecode = compile_with_prefix(compile_deploy, ERC20_PATH).unwrap();
+        let bytecode = get_bytecode("erc20");
         let erc20 = deploy_contract(&mut db, bytecode, Some(constructor)).unwrap();
 
         (db, erc20)
@@ -143,7 +34,7 @@ mod tests {
 
     fn setup_erc20x(db: &mut InMemoryDB) -> Address {
         // Deploy contract
-        let bytecode = compile_with_prefix(compile_deploy, ERC20X_PATH).unwrap();
+        let bytecode = get_bytecode("erc20x");
         deploy_contract(db, bytecode, None).unwrap()
     }
 
