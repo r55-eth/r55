@@ -35,7 +35,8 @@ fn main() -> eyre::Result<()> {
             info!("Compiling contract: {}", contract_name);
 
             // Compile contract using existing working code
-            let bytecode = compile_with_prefix(compile_deploy, path.to_str().unwrap())?;
+            let path = path.to_str().unwrap();
+            let bytecode = compile_with_prefix(compile_deploy, path, contract_name == "erc20x")?;
 
             // Save bytecode file
             let bytecode_path = output_dir.join(format!("{}.bin", contract_name));
@@ -46,22 +47,42 @@ fn main() -> eyre::Result<()> {
     Ok(())
 }
 
-fn compile_runtime(path: &str) -> eyre::Result<Vec<u8>> {
-    info!("Compiling runtime: {}", path);
-    let status = Command::new("cargo")
-        .arg("+nightly-2025-01-07")
-        .arg("build")
-        .arg("-r")
-        .arg("--lib")
-        .arg("-Z")
-        .arg("build-std=core,alloc")
-        .arg("--target")
-        .arg("riscv64imac-unknown-none-elf")
-        .arg("--bin")
-        .arg("runtime")
-        .current_dir(path)
-        .status()
-        .expect("Failed to execute cargo command");
+fn compile_runtime(path: &str, with_bytecode: bool) -> eyre::Result<Vec<u8>> {
+    let status = if with_bytecode {
+        info!("Compiling runtime (with bytecode): {}", path);
+        Command::new("cargo")
+            .arg("+nightly-2025-01-07")
+            .arg("build")
+            .arg("-r")
+            .arg("--lib")
+            .arg("-Z")
+            .arg("build-std=core,alloc")
+            .arg("--target")
+            .arg("riscv64imac-unknown-none-elf")
+            .arg("--bin")
+            .arg("runtime")
+            .arg("--features")
+            .arg("r55-output-bytecode/with-bytecode")
+            .current_dir(path)
+            .status()
+            .expect("Failed to execute cargo command")
+    } else {
+        info!("Compiling runtime: {}", path);
+        Command::new("cargo")
+            .arg("+nightly-2025-01-07")
+            .arg("build")
+            .arg("-r")
+            .arg("--lib")
+            .arg("-Z")
+            .arg("build-std=core,alloc")
+            .arg("--target")
+            .arg("riscv64imac-unknown-none-elf")
+            .arg("--bin")
+            .arg("runtime")
+            .current_dir(path)
+            .status()
+            .expect("Failed to execute cargo command")
+    };
 
     if !status.success() {
         error!("Cargo command failed with status: {}", status);
@@ -90,8 +111,9 @@ fn compile_runtime(path: &str) -> eyre::Result<Vec<u8>> {
     Ok(bytecode)
 }
 
-pub fn compile_deploy(path: &str) -> eyre::Result<Vec<u8>> {
-    compile_runtime(path)?;
+pub fn compile_deploy(path: &str, with_bytecode: bool) -> eyre::Result<Vec<u8>> {
+    compile_runtime(path, with_bytecode)?;
+
     info!("Compiling deploy: {}", path);
     let status = Command::new("cargo")
         .arg("+nightly-2025-01-07")
@@ -137,11 +159,11 @@ pub fn compile_deploy(path: &str) -> eyre::Result<Vec<u8>> {
     Ok(bytecode)
 }
 
-pub fn compile_with_prefix<F>(compile_fn: F, path: &str) -> eyre::Result<Vec<u8>>
+pub fn compile_with_prefix<F>(compile_fn: F, path: &str, with_bytecode: bool) -> eyre::Result<Vec<u8>>
 where
-    F: FnOnce(&str) -> eyre::Result<Vec<u8>>,
+    F: FnOnce(&str, bool) -> eyre::Result<Vec<u8>>,
 {
-    let bytecode = compile_fn(path)?;
+    let bytecode = compile_fn(path, with_bytecode)?;
     let mut prefixed_bytecode = vec![0xff]; // Add the 0xff prefix
     prefixed_bytecode.extend_from_slice(&bytecode);
     Ok(prefixed_bytecode)

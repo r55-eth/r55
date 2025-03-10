@@ -1,3 +1,4 @@
 [alias]
-test-r55 = "run -p r55-compile && test -p r55"
+compile = "run --package r55-compile"
+test-r55 = "test --package r55"
 

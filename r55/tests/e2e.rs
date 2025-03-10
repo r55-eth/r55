@@ -94,9 +94,21 @@ fn erc20x() {
     let bytecode = get_bytecode("erc20");
     let erc20 = deploy_contract(&mut db, bytecode, Some(constructor)).unwrap();
 
+    let erc20_bytecode = get_selector_from_sig("erc20_bytecode()");
     let total_supply = get_selector_from_sig("total_supply()");
     let selector_x_balance = get_selector_from_sig("x_balance_of(address,address)");
     let selector_x_mint = get_selector_from_sig("x_mint(address,uint256,address)");
+
+    info!("----------------------------------------------------------");
+    info!("-- GET ERC20 BYTECODE ------------------------------------");
+    info!("----------------------------------------------------------");
+    match run_tx(&mut db, &erc20x, erc20_bytecode.to_vec(), &alice) {
+        Ok(res) => info!("Success! {}", res),
+        Err(e) => {
+            error!("Error when executing tx! {}", e);
+            panic!()
+        }
+    };
 
     info!("----------------------------------------------------------");
     info!("-- X-MINT TX -----------------------------------------------");

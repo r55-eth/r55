@@ -3,18 +3,24 @@
 
 use core::default::Default;
 
-use alloy_core::primitives::{Address, U256};
+use alloy_core::primitives::{Address, U256, Bytes};
 use contract_derive::{contract, show_streams};
 
 extern crate alloc;
 
 use erc20::{ERC20Error, IERC20};
+use r55_output_bytecode::get_bytecode;
 
 #[derive(Default, )]
 pub struct ERC20x;
 
 #[contract]
 impl ERC20x {
+
+    pub fn erc20_bytecode(&self) -> Bytes {
+        get_bytecode("erc20")
+    }
+
     pub fn x_balance_of(&self, owner: Address, token_addr: Address) -> Option<U256> {
         let token = IERC20::new(token_addr).with_ctx(self);         // IERC20<ReadOnly>
         token.balance_of(owner)

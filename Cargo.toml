@@ -2,13 +2,14 @@
 
 resolver = "2"
 
-members = ["eth-riscv-interpreter", "eth-riscv-syscalls", "r55", "r55-compile"]
+members = ["eth-riscv-interpreter", "eth-riscv-syscalls", "r55", "r55-compile", "r55-output-bytecode"]
 default-members = ["eth-riscv-interpreter", "eth-riscv-syscalls", "r55"]
 
 exclude = [
     "contract-derive",
     "examples/*",
     "eth-riscv-runtime",
+    "r55-output-bytecode"
 ]
 
 [workspace.package]
@@ -20,6 +21,7 @@ repository = "https://github.com/leonardoalt/r5"
 [workspace.dependencies]
 eth-riscv-interpreter = { path = "eth-riscv-interpreter" }
 eth-riscv-syscalls = { path = "eth-riscv-syscalls" }
+r55-output-bytecode = { path = "r55-output-bytecode" }
 
 eyre = "0.6.12"
 thiserror = "2.0.3"
