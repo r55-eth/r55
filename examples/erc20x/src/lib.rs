@@ -23,10 +23,10 @@ impl ERC20x {
     }
 
     pub fn x_deploy(&mut self, owner: Address) -> (Address, Address) {
-        let token = ERC20::deploy(owner);
-        let owner = IERC20::new(token).with_ctx(self).owner().expect("Unable to get owner");
+        let token = ERC20::deploy(owner).with_ctx(self);            // IERC20<ReadWrite>
+        let owner = token.owner().expect("Unable to get owner");
 
-        (token, owner)
+        (token.address(), owner)
     }
 
     pub fn x_balance_of(&self, owner: Address, token_addr: Address) -> Option<U256> {
