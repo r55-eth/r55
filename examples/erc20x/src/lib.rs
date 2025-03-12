@@ -9,16 +9,24 @@ use contract_derive::{contract, show_streams};
 extern crate alloc;
 
 use erc20::{ERC20Error, IERC20};
-use r55_output_bytecode::get_bytecode;
+
+mod deployable;
+use deployable::ERC20;
 
 #[derive(Default, )]
 pub struct ERC20x;
 
 #[contract]
 impl ERC20x {
+    pub fn x_bytecode(&mut self) -> Bytes {
+        ERC20::bytecode()
+    }
 
-    pub fn erc20_bytecode(&self) -> Bytes {
-        get_bytecode("erc20")
+    pub fn x_deploy(&mut self, owner: Address) -> (Address, Address) {
+        let token = ERC20::deploy(owner);
+        let owner = IERC20::new(token).with_ctx(self).owner().expect("Unable to get owner");
+
+        (token, owner)
     }
 
     pub fn x_balance_of(&self, owner: Address, token_addr: Address) -> Option<U256> {

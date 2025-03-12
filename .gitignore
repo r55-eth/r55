@@ -16,5 +16,9 @@ Cargo.lock
 # Ignore RISCV emulator files
 **/rvemu.*
 
-# Ignore compiled contracts in r55-output-bytecode
-*.bin
+# Ignore auto-generated files
+r55-output-bytecode/
+*/generated/
+
+# Ignore .DS_Store
+.DS_Store

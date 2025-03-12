@@ -13,7 +13,6 @@ interface-only = []
 [dependencies]
 contract-derive = { path = "../../contract-derive" }
 eth-riscv-runtime = { path = "../../eth-riscv-runtime" }
-r55-output-bytecode = { path = "../../r55-output-bytecode" }
 
 erc20 = { path = "../erc20", features = ["interface-only"] }
 

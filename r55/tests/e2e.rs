@@ -1,4 +1,4 @@
-use alloy_primitives::{address, Address, Bytes, U256};
+use alloy_primitives::{address, Address, Bytes, B256, U256};
 use alloy_sol_types::SolValue;
 use r55::{
     get_bytecode,
@@ -87,28 +87,30 @@ fn erc20x() {
     let alice: Address = address!("000000000000000000000000000000000000000A");
     add_balance_to_db(&mut db, alice, 1e18 as u64);
 
-    let bytecode_x = get_bytecode("erc20x");
-    let erc20x = deploy_contract(&mut db, bytecode_x, None).unwrap();
+    let erc20x = deploy_contract(&mut db, get_bytecode("erc20x"), None).unwrap();
 
-    let constructor = erc20x.abi_encode();
-    let bytecode = get_bytecode("erc20");
-    let erc20 = deploy_contract(&mut db, bytecode, Some(constructor)).unwrap();
-
-    let erc20_bytecode = get_selector_from_sig("erc20_bytecode()");
+    let selector_x_deploy = get_selector_from_sig("x_deploy(address)");
     let total_supply = get_selector_from_sig("total_supply()");
     let selector_x_balance = get_selector_from_sig("x_balance_of(address,address)");
     let selector_x_mint = get_selector_from_sig("x_mint(address,uint256,address)");
 
     info!("----------------------------------------------------------");
-    info!("-- GET ERC20 BYTECODE ------------------------------------");
+    info!("-- X-DEPLOY ERC20 ----------------------------------------");
     info!("----------------------------------------------------------");
-    match run_tx(&mut db, &erc20x, erc20_bytecode.to_vec(), &alice) {
-        Ok(res) => info!("Success! {}", res),
+    let mut complete_calldata_x_deploy = selector_x_deploy.to_vec();
+    complete_calldata_x_deploy.append(&mut erc20x.abi_encode());
+    let (erc20, owner) = match run_tx(&mut db, &erc20x, complete_calldata_x_deploy.to_vec(), &alice) {
+        Ok(res) => (
+            Address::from_slice(&res.output.as_slice()[12..32]),
+            Address::from_slice(&res.output.as_slice()[44..])
+        ),
         Err(e) => {
             error!("Error when executing tx! {}", e);
             panic!()
         }
     };
+    assert_eq!(owner, erc20x);
+    info!("ERC20 x-deployed at: {}\n", erc20);
 
     info!("----------------------------------------------------------");
     info!("-- X-MINT TX -----------------------------------------------");
@@ -124,7 +126,7 @@ fn erc20x() {
     match run_tx(&mut db, &erc20x, complete_calldata_x_mint.clone(), &alice) {
         Ok(res) => info!("{}", res),
         Err(e) => {
-            error!("Error when executing tx! {:#?}", e);
+            error!("Error when executing tx! {}", e);
             panic!()
         }
     };
@@ -136,7 +138,7 @@ fn erc20x() {
     match run_tx(&mut db, &erc20, total_supply.to_vec(), &alice) {
         Ok(res) => info!("Success! {}", res),
         Err(e) => {
-            error!("Error when executing tx! {:#?}", e);
+            error!("Error when executing tx! {}", e);
             panic!()
         }
     };

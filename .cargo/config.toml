@@ -1,4 +1,8 @@
 [alias]
 compile = "run --package r55-compile"
 test-r55 = "test --package r55"
+test-e2e = "test --package r55 --test e2e"
+test-erc20 = "test --package r55 --test erc20"
+test-erc721 = "test --package r55 --test erc721"
+
 

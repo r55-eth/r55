@@ -8,7 +8,7 @@ fn main() {
     // Check for compiled contracts
     let contracts_dir = project_root.parent().unwrap().join("r55-output-bytecode");
     if !contracts_dir.exists() {
-        panic!("No compiled contracts found. Please run `cargo run -p r55-compile` first");
+        panic!("No compiled contracts found. Please run `cargo compile` first");
     }
 
     // Generate `r55/generated/mod.rs` code to get compiled bytecode for tests
@@ -19,23 +19,6 @@ fn main() {
 
 use alloy_core::primitives::Bytes;
 use core::include_bytes;
-"#);
-
-    // Generate `r55-output-bytecode/lib.rs` code to embed compiled bytecode
-    // to other contract's (deployer) bytecode
-    let mut output = String::from(r#"#![no_std]
-
-//! This module contains auto-generated code.
-//! Do not edit manually!
-
-use alloy_core::primitives::Bytes;
-use core::include_bytes;
-
-// Placeholder for initial runtime compilation
-#[cfg(not(feature = "with-bytecode"))]
-pub fn get_bytecode(_contract_name: &str) -> Bytes { Bytes::new() }
-
-// Necessary to embed bytecode into deployer's runtime
 "#);
 
     // Add bytecode constants
@@ -51,12 +34,6 @@ pub fn get_bytecode(_contract_name: &str) -> Bytes { Bytes::new() }
                 .unwrap()
                 .to_uppercase();
             
-            output.push_str(r#"#[cfg(feature = "with-bytecode")]"#);
-            output.push_str(&format!(
-                "\npub const {}_BYTECODE: &[u8] = include_bytes!(\"../../r55-output-bytecode/{}.bin\");\n\n",
-                contract_name.replace("-", "_"),
-                contract_name.to_lowercase()
-            ));
             generated.push_str(&format!(
                 "\npub const {}_BYTECODE: &[u8] = include_bytes!(\"../../../r55-output-bytecode/{}.bin\");",
                 contract_name.replace("-", "_"),
@@ -66,10 +43,7 @@ pub fn get_bytecode(_contract_name: &str) -> Bytes { Bytes::new() }
     }
 
     // Helper function to get the bytecode given a contract name
-    let chunk = "\npub fn get_bytecode(contract_name: &str) -> Bytes {\n    let initcode = match contract_name {\n";
-    output.push_str(r#"#[cfg(feature = "with-bytecode")]"#);
-    output.push_str(chunk);
-    generated.push_str(&format!("\n{}", chunk));
+    generated.push_str(&format!("\n{}", "\npub fn get_bytecode(contract_name: &str) -> Bytes {\n    let initcode = match contract_name {\n"));
     
     for entry in fs::read_dir(&contracts_dir).unwrap() {
         let entry = entry.unwrap();
@@ -82,28 +56,20 @@ pub fn get_bytecode(_contract_name: &str) -> Bytes { Bytes::new() }
                 .to_str()
                 .unwrap();
             
-            let chunk = format!(
+            generated.push_str(&format!(
                 "        \"{}\" => {}_BYTECODE,\n",
                 contract_name.replace("-", "_"),
                 contract_name.replace("-", "_").to_uppercase()
-            );
-            output.push_str(&chunk);
-            generated.push_str(&chunk);
+            ));
         }
     }
     
-    let chunk = r#"        _ => return Bytes::new()
+    generated.push_str(r#"        _ => return Bytes::new()
     };
 
     Bytes::from(initcode)
 }
-"#;
-    output.push_str(chunk);
-    generated.push_str(chunk);
-
-    // Write `r55-output-bytecode`
-    let output_path = contracts_dir.join("src").join("lib.rs");
-    fs::write(output_path, output).unwrap();
+"#);
 
     // Write `r55/generated` code
     let generated_path = project_root.join("src").join("generated");
