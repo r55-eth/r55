@@ -5,8 +5,11 @@ edition.workspace = true
 license.workspace = true
 repository.workspace = true
 
-
 [dependencies]
 eyre.workspace = true
+thiserror.workspace = true
+
 tracing.workspace = true
 tracing-subscriber.workspace = true
+
+toml.workspace = true
