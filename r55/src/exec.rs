@@ -96,7 +96,7 @@ pub fn run_tx(
             tx.data = calldata.into();
             tx.value = U256::from(0);
             tx.gas_price = U256::from(42);
-            tx.gas_limit = 100_000;
+            tx.gas_limit = 100_000_000;
         })
         .append_handler_register(handle_register)
         .build();
