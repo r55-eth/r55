@@ -1,7 +1,7 @@
 use alloy_primitives::{Bytes, U256};
 use alloy_sol_types::SolValue;
 use r55::{
-    compile_deploy, compile_with_prefix,
+    get_bytecode,
     exec::{deploy_contract, run_tx},
     test_utils::{
         add_balance_to_db, get_selector_from_sig, initialize_logger, load_bytecode_from_file,
@@ -14,7 +14,6 @@ use revm::{
 use tracing::{debug, error, info};
 
 const EVM_PATH: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/tests/simple-evm-contract.txt");
-const RISCV_PATH: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/../examples/evm-caller");
 
 // ------------------------------------------------------------------------------------------------
 //    SIMPLE EVM CONTRACT
@@ -42,7 +41,7 @@ fn evm_call() {
     let mut db = InMemoryDB::default();
 
     let bytecode_evm = load_bytecode_from_file(EVM_PATH);
-    let bytecode_r55 = compile_with_prefix(compile_deploy, RISCV_PATH).unwrap();
+    let bytecode_r55 = get_bytecode("evm_caller");
     let evm = deploy_contract(&mut db, bytecode_evm, None).unwrap();
     let r55 = deploy_contract(&mut db, bytecode_r55, None).unwrap();
 

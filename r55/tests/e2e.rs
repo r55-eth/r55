@@ -1,15 +1,12 @@
-use alloy_primitives::{address, Address, Bytes, U256};
+use alloy_primitives::{address, Address, Bytes, B256, U256};
 use alloy_sol_types::SolValue;
 use r55::{
-    compile_deploy, compile_with_prefix,
+    get_bytecode,
     exec::{deploy_contract, run_tx},
-    test_utils::{add_balance_to_db, get_selector_from_sig, initialize_logger},
+    test_utils::{add_balance_to_db, get_selector_from_sig, initialize_logger}, 
 };
 use revm::InMemoryDB;
 use tracing::{debug, error, info};
-
-const ERC20_PATH: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/../examples/erc20");
-const ERC20X_PATH: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/../examples/erc20x");
 
 #[test]
 fn erc20() {
@@ -21,7 +18,8 @@ fn erc20() {
     add_balance_to_db(&mut db, alice, 1e18 as u64);
 
     let constructor = alice.abi_encode();
-    let bytecode = compile_with_prefix(compile_deploy, ERC20_PATH).unwrap();
+    // let bytecode = compile_with_prefix(compile_deploy, ERC20_PATH).unwrap();
+    let bytecode = get_bytecode("erc20");
     let erc20 = deploy_contract(&mut db, bytecode, Some(constructor)).unwrap();
 
     let total_supply = get_selector_from_sig("total_supply()");
@@ -89,16 +87,30 @@ fn erc20x() {
     let alice: Address = address!("000000000000000000000000000000000000000A");
     add_balance_to_db(&mut db, alice, 1e18 as u64);
 
-    let bytecode_x = compile_with_prefix(compile_deploy, ERC20X_PATH).unwrap();
-    let erc20x = deploy_contract(&mut db, bytecode_x, None).unwrap();
+    let erc20x = deploy_contract(&mut db, get_bytecode("erc20x"), None).unwrap();
 
-    let constructor = erc20x.abi_encode();
-    let bytecode = compile_with_prefix(compile_deploy, ERC20_PATH).unwrap();
-    let erc20 = deploy_contract(&mut db, bytecode, Some(constructor)).unwrap();
-
+    let selector_x_deploy = get_selector_from_sig("x_deploy(address)");
     let total_supply = get_selector_from_sig("total_supply()");
     let selector_x_balance = get_selector_from_sig("x_balance_of(address,address)");
     let selector_x_mint = get_selector_from_sig("x_mint(address,uint256,address)");
+
+    info!("----------------------------------------------------------");
+    info!("-- X-DEPLOY ERC20 ----------------------------------------");
+    info!("----------------------------------------------------------");
+    let mut complete_calldata_x_deploy = selector_x_deploy.to_vec();
+    complete_calldata_x_deploy.append(&mut erc20x.abi_encode());
+    let (erc20, owner) = match run_tx(&mut db, &erc20x, complete_calldata_x_deploy.to_vec(), &alice) {
+        Ok(res) => (
+            Address::from_slice(&res.output.as_slice()[12..32]),
+            Address::from_slice(&res.output.as_slice()[44..])
+        ),
+        Err(e) => {
+            error!("Error when executing tx! {}", e);
+            panic!()
+        }
+    };
+    assert_eq!(owner, erc20x);
+    info!("ERC20 x-deployed at: {}\n", erc20);
 
     info!("----------------------------------------------------------");
     info!("-- X-MINT TX -----------------------------------------------");
@@ -114,7 +126,7 @@ fn erc20x() {
     match run_tx(&mut db, &erc20x, complete_calldata_x_mint.clone(), &alice) {
         Ok(res) => info!("{}", res),
         Err(e) => {
-            error!("Error when executing tx! {:#?}", e);
+            error!("Error when executing tx! {}", e);
             panic!()
         }
     };
@@ -126,7 +138,7 @@ fn erc20x() {
     match run_tx(&mut db, &erc20, total_supply.to_vec(), &alice) {
         Ok(res) => info!("Success! {}", res),
         Err(e) => {
-            error!("Error when executing tx! {:#?}", e);
+            error!("Error when executing tx! {}", e);
             panic!()
         }
     };

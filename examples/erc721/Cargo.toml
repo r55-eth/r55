@@ -1,5 +1,5 @@
 [package]
-name = "erc20x"
+name = "erc721"
 version = "0.1.0"
 edition = "2021"
 
@@ -13,8 +13,6 @@ interface-only = []
 [dependencies]
 contract-derive = { path = "../../contract-derive" }
 eth-riscv-runtime = { path = "../../eth-riscv-runtime" }
-
-erc20 = { path = "../erc20", features = ["interface-only"] }
 
 alloy-core = { version = "0.8.20", default-features = false }
 alloy-sol-types = { version = "0.8.20", default-features = false }

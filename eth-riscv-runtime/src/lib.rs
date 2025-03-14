@@ -12,6 +12,9 @@ pub mod block;
 pub mod tx;
 pub mod types;
 
+pub mod create;
+pub use create::Deployable;
+
 pub mod error;
 pub use error::{revert, revert_with_error, Error};
 

@@ -1,4 +1,5 @@
 use alloy_core::hex::FromHex;
+use alloy_primitives::address;
 use revm::Database;
 pub use revm::{
     primitives::{keccak256, ruint::Uint, AccountInfo, Address, Bytecode, Bytes, U256},
@@ -7,6 +8,10 @@ pub use revm::{
 use std::{fs, path::Path, sync::Once};
 
 static INIT: Once = Once::new();
+
+pub const ALICE: Address = address!("000000000000000000000000000000000000000A");
+pub const BOB: Address = address!("000000000000000000000000000000000000000B");
+pub const CAROL: Address = address!("000000000000000000000000000000000000000C");
 
 pub fn initialize_logger() {
     INIT.call_once(|| {
@@ -39,6 +44,13 @@ pub fn get_selector_from_sig(sig: &str) -> [u8; 4] {
     keccak256(sig)[0..4]
         .try_into()
         .expect("Selector should have exactly 4 bytes")
+}
+
+pub fn get_calldata(selector: [u8; 4], mut args: Vec<u8>) -> Vec<u8> {
+    let mut calldata = selector.to_vec();
+    calldata.append(&mut args);
+
+    calldata
 }
 
 pub fn get_mapping_slot(key_bytes: Vec<u8>, id: U256) -> U256 {

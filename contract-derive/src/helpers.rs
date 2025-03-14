@@ -175,6 +175,12 @@ where
             }
         }
 
+        impl <C: CallCtx> #interface_name<C> {
+            pub fn address(&self) -> Address {
+                self.address
+            }
+        }
+
         impl<C: StaticCtx> #interface_name<C> {
             #(#immut_method_impls)*
         }
