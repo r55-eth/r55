@@ -49,10 +49,10 @@ where
 }
 
 /// Public interface for key-value storage types (like `Mapping`)
-pub trait KeyValueStorage<K> {
-    type ReadValue;
-    type WriteValue;
+pub trait KeyValueStorage {
+    type Key;
+    type Value;
 
-    fn read(&self, key: K) -> Self::ReadValue;
-    fn write(&mut self, key: K, value: Self::WriteValue);
+    fn read(&self, key: Self::Key) -> Self::Value;
+    fn write(&mut self, key: Self::Key, value: Self::Value);
 }

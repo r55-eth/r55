@@ -1,6 +1,6 @@
 use super::*;
 
-/// Implements a Solidity-like Mapping type.
+/// Implements a Solidity-like Mapping type with enhanced developer experience.
 #[derive(Default)]
 pub struct Mapping<K, V> {
     id: U256,
@@ -16,13 +16,16 @@ impl<K, V> StorageLayout for Mapping<K, V> {
     }
 }
 
-impl<K, V> Mapping<K, V>
-where
-    K: SolValue,
-{
-    pub fn encode_key(&self, key: K) -> U256 {
-        let key_bytes = key.abi_encode();
-        let id_bytes: [u8; 32] = self.id.to_be_bytes();
+/// Helper trait for encoding keys
+pub trait KeyEncoder {
+    fn encode_key(self, base: U256) -> U256;
+}
+
+// Implement `KeyEncoder` for any `SolValue` type
+impl<K: SolValue> KeyEncoder for K {
+    fn encode_key(self, base: U256) -> U256 {
+        let key_bytes = self.abi_encode();
+        let id_bytes: [u8; 32] = base.to_be_bytes();
 
         // Concatenate the key bytes and id bytes
         let mut concatenated = Vec::with_capacity(key_bytes.len() + id_bytes.len());
@@ -37,43 +40,117 @@ where
     }
 }
 
-// Implementation for mappings that wrap `StorageStorable` types 
-impl<K, T, V> KeyValueStorage<K> for Mapping<K, T>
-where
-    K: SolValue,
-    T: StorageStorable<Value = V>,
-    V: SolValue + core::convert::From<<<V as SolValue>::SolType as SolType>::RustType>,
-{
-    type ReadValue = V;
-    type WriteValue = V;
-
-    fn read(&self, key: K) -> Self::ReadValue {
-        T::__read(self.encode_key(key))
-    }
-
-    fn write(&mut self, key: K, value: Self::WriteValue) {
-        T::__write(self.encode_key(key), value)
+// Base impl for `Mapping` to encode keys based on its `StorageLayout` ID
+impl<K, V> Mapping<K, V> {
+    fn encode_key<T: KeyEncoder>(&self, key: T) -> U256 {
+        key.encode_key(self.id)
     }
 }
 
-// Implementation for nested mappings
-impl<K1, K2, V> KeyValueStorage<K1> for Mapping<K1, Mapping<K2, V>>
-where
-    K1: SolValue,
-{
-    type ReadValue = Mapping<K2, V>;
-    type WriteValue = ();
+// --- KEY-VALUE-STORAGE IMPLEMENTATION ----------------------------------------
 
-    fn read(&self, key: K1) -> Self::ReadValue {
-        Mapping {
-            id: self.encode_key(key),
-            _pd: PhantomData,
-        }
+impl<K, V> KeyValueStorage for Mapping<K, V>
+where
+    K: SolValue,
+    V: StorageStorable,
+{
+    type Key = K;
+    type Value = V::Value;
+
+    fn read(&self, key: K) -> V::Value {
+        let key = self.encode_key(key);
+        V::__read(key)
     }
 
-    // Mappings that store other mappings cannot be written to
-    // Only the lowest level mapping can store values on its `StorageStorable` wrapped type
-    fn write(&mut self, _key: K1, _value: Self::WriteValue) {
-        revert();
+    fn write(&mut self, key: K, value: V::Value) {
+        let key = self.encode_key(key);
+        V::__write(key, value)
+    }
+}
+
+impl<K1, K2, V> KeyValueStorage for Mapping<K1, Mapping<K2, V>>
+where
+    K1: SolValue,
+    K2: SolValue,
+    V: StorageStorable,
+{
+    type Key = (K1, K2);
+    type Value = V::Value;
+
+    fn read(&self, keys: Self::Key) -> V::Value {
+        let (k1, k2) = keys;
+        let int = self.encode_key(k1);
+        let key = k2.encode_key(int);
+        V::__read(key)
+    }
+
+    fn write(&mut self, keys: Self::Key, value: V::Value) {
+        let (k1, k2) = keys;
+        let int = self.encode_key(k1);
+        let key = k2.encode_key(int);
+        V::__write(key, value)
+    }
+}
+
+impl<K1, K2, K3, V> KeyValueStorage for Mapping<K1, Mapping<K2, Mapping<K3, V>>>
+where
+    K1: SolValue,
+    K2: SolValue,
+    K3: SolValue,
+    V: StorageStorable,
+{
+    type Key = (K1, K2, K3);
+    type Value = V::Value;
+
+    fn read(&self, keys: Self::Key) -> V::Value {
+        let (k1, k2, k3) = keys;
+        let int1 = self.encode_key(k1);
+        let int2 = k2.encode_key(int1);
+        let key = k3.encode_key(int2);
+        V::__read(key)
+    }
+
+    fn write(&mut self, keys: Self::Key, value: V::Value) {
+        let (k1, k2, k3) = keys;
+        let int1 = self.encode_key(k1);
+        let int2 = k2.encode_key(int1);
+        let key = k3.encode_key(int2);
+        V::__write(key, value)
+    }
+}
+
+// --- CONVENIENCE METHODS ----------------------------------------------------
+
+// No convenience methods needed for the single-key case,
+// as the trait impl is directly usable without needing a tuple
+
+impl<K1, K2, V> Mapping<K1, Mapping<K2, V>>
+where
+    K1: SolValue,
+    K2: SolValue,
+    V: StorageStorable,
+{
+    pub fn read(&self, k1: K1, k2: K2) -> V::Value {
+        <Self as KeyValueStorage>::read(self, (k1, k2))
+    }
+
+    pub fn write(&mut self, k1: K1, k2: K2, value: V::Value) {
+        <Self as KeyValueStorage>::write(self, (k1, k2), value)
+    }
+}
+
+impl<K1, K2, K3, V> Mapping<K1, Mapping<K2, Mapping<K3, V>>>
+where
+    K1: SolValue,
+    K2: SolValue,
+    K3: SolValue,
+    V: StorageStorable,
+{
+    pub fn read(&self, k1: K1, k2: K2, k3: K3) -> V::Value {
+        <Self as KeyValueStorage>::read(self, (k1, k2, k3))
+    }
+
+    pub fn write(&mut self, k1: K1, k2: K2, k3: K3, value: V::Value) {
+        <Self as KeyValueStorage>::write(self, (k1, k2, k3), value)
     }
 }

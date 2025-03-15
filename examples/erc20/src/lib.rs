@@ -69,8 +69,7 @@ impl ERC20 {
         if amount == U256::ZERO { return Err(ERC20Error::ZeroAmount) };
 
         // Increase user balance
-        let to_balance = self.balances.read(to);
-        self.balances.write(to, to_balance + amount);
+        self.balances.write(to, self.balances.read(to) + amount);
         log::emit(Transfer::new(
             address!("0000000000000000000000000000000000000000"),
             to,
@@ -88,8 +87,7 @@ impl ERC20 {
     // to ensure that callers have proper error-handling.
     // Note that this is a zero-cost (runtime) abstraction that provides better compile-time guarantees.
     pub fn approve(&mut self, spender: Address, amount: U256) -> bool {
-        let mut spender_allowances = self.allowances.read(msg_sender());
-        spender_allowances.write(spender, amount);
+        self.allowances.write(msg_sender(), spender, amount);
         true
     }
 
@@ -119,7 +117,7 @@ impl ERC20 {
         if amount == U256::ZERO { return Err(ERC20Error::ZeroAmount) };
 
         // Ensure enough allowance
-        let allowance = self.allowances.read(sender).read(msg_sender());
+        let allowance = self.allowances.read(sender, msg_sender());
         if allowance < amount { return Err(ERC20Error::InsufficientAllowance(allowance)) };
 
         // Ensure enough balance
@@ -128,8 +126,7 @@ impl ERC20 {
 
         // Update state
         self.allowances
-            .read(sender)
-            .write(msg_sender(), allowance - amount);
+            .write(sender, msg_sender(), allowance - amount);
         self.balances.write(sender, sender_balance - amount);
         self.balances.write(recipient, self.balances.read(recipient) + amount);
 
@@ -163,6 +160,6 @@ impl ERC20 {
     }
 
     pub fn allowance(&self, owner: Address, spender: Address) -> U256 {
-        self.allowances.read(owner).read(spender)
+        self.allowances.read(owner, spender)
     }
 }
