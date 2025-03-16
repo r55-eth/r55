@@ -152,8 +152,7 @@ impl ERC20 {
         if from_balance < amount { return Err(ERC20Error::InsufficientBalance(from_balance)) };
 
         // Update state
-        self.allowance_of
-            .write(from, msg_sender, allowance - amount);
+        self.allowance_of.write(from, msg_sender, allowance - amount);
         self.balance_of.write(from, from_balance - amount);
         self.balance_of.write(to, self.balance_of.read(to) + amount);
 

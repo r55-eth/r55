@@ -141,7 +141,7 @@ impl ERC721 {
 
         // Check authorization
         let sender = msg_sender();
-        if sender != from 
+        if sender != from
             && !self.is_operator.read(from, sender)
             && sender != self.approval_of.read(id) {
             return Err(ERC721Error::Unauthorized);
