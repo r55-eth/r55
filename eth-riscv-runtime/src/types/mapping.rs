@@ -1,6 +1,6 @@
 use super::*;
 
-/// Implements a Solidity-like Mapping type
+/// Implements a Solidity-like Mapping type.
 #[derive(Default)]
 pub struct Mapping<K, V> {
     id: U256,
