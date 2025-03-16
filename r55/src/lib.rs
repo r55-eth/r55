@@ -150,7 +150,6 @@ mod tests {
 
     #[test]
     fn test_runtime() {
-        initialize_logger();
         let (mut db, erc20) = setup_erc20(ALICE);
 
         // Define fn selectors
@@ -250,10 +249,6 @@ mod tests {
 
         // Check Carol's allowance
         let calldata_allowance = get_calldata(selector_allowance, (ALICE, CAROL).abi_encode());
-        if let Err(e) = run_tx(&mut db, &erc20, calldata_allowance.clone(), &ALICE) {
-            error!("Error executing tx: {}", e);
-        }
-
         let carol_allowance_result = run_tx(&mut db, &erc20, calldata_allowance.clone(), &ALICE)
             .expect("Error executing tx")
             .output;

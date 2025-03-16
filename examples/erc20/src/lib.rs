@@ -119,7 +119,7 @@ impl ERC20 {
         if amount == U256::ZERO { return Err(ERC20Error::ZeroAmount) };
         if from == to { return Err(ERC20Error::SelfTransfer) };
 
-        // Read user balance_of
+        // Read user balances
         let from_balance = self.balance_of.read(from);
         let to_balance = self.balance_of.read(to);
 
