@@ -146,17 +146,15 @@ impl ERC20 {
         if from == to { return Err(ERC20Error::SelfTransfer) };
 
         // Ensure enough allowance
-        let allowance = self.allowance_of.read(from).read(msg_sender);
+        let allowance = *self.allowance_of[from][msg_sender].read();
         if allowance < amount { return Err(ERC20Error::InsufficientAllowance(allowance)) };
 
         // Ensure enough balance
-        let from_balance = self.balance_of.read(from);
+        let from_balance = *self.balance_of[from].read();
         if from_balance < amount { return Err(ERC20Error::InsufficientBalance(from_balance)) };
 
         // Update state
-        self.allowance_of
-            .read(from)
-            .write(msg_sender, allowance - amount);
+        *self.allowance_of[from][msg_sender].write() = allowance - amount;
         self.balance_of.write(from, from_balance - amount);
         self.balance_of.write(to, self.balance_of.read(to) + amount);
 
