@@ -86,8 +86,8 @@ impl ERC20 {
         if to == Address::ZERO { return Err(ERC20Error::ZeroAddress) };
 
         // Increase user balance
-        let to_balance = self.balance_of.read(to);
-        self.balance_of.write(to, to_balance + amount);
+        let to_balance = *self.balance_of[to];
+        self.balance_of[to].write(to_balance + amount);
 
         // Increase total supply
         self.total_supply += amount;
@@ -105,8 +105,7 @@ impl ERC20 {
         if spender == owner { return Err(ERC20Error::SelfApproval) };
 
         // Update state
-        let mut spender_allowances = self.allowance_of.read(owner);
-        spender_allowances.write(spender, amount);
+        self.allowance_of[owner][spender].write(amount);
 
         // Emit event + return 
         log::emit(Approval::new(owner, spender, amount));
@@ -121,16 +120,19 @@ impl ERC20 {
         if amount == U256::ZERO { return Err(ERC20Error::ZeroAmount) };
         if from == to { return Err(ERC20Error::SelfTransfer) };
 
-        // Read user balances
-        let from_balance = self.balance_of.read(from);
-        let to_balance = self.balance_of.read(to);
+        // Storage writes happens when the guards are dropped 
+        {
+            // Read user balances
+            let mut from_balance = *self.balance_of[from];
+            let mut to_balance = *self.balance_of[to];
 
-        // Ensure enough balance
-        if from_balance < amount { return Err(ERC20Error::InsufficientBalance(from_balance)) }
+            // Ensure enough balance
+            if from_balance < amount { return Err(ERC20Error::InsufficientBalance(from_balance)) }
 
-        // Update state
-        self.balance_of.write(from, from_balance - amount);
-        self.balance_of.write(to, to_balance + amount);
+            // Update state
+            from_balance -= amount;
+            to_balance += amount;
+        }
 
         // Emit event + return 
         log::emit(Transfer::new(from, to, amount));
@@ -145,18 +147,23 @@ impl ERC20 {
         if amount == U256::ZERO { return Err(ERC20Error::ZeroAmount) };
         if from == to { return Err(ERC20Error::SelfTransfer) };
 
-        // Ensure enough allowance
-        let allowance = *self.allowance_of[from][msg_sender].read();
-        if allowance < amount { return Err(ERC20Error::InsufficientAllowance(allowance)) };
+        // Storage writes happens when the guards are dropped 
+        {
+            // Ensure enough allowance
+            let mut allowance = *self.allowance_of[from][msg_sender];
+            if allowance < amount { return Err(ERC20Error::InsufficientAllowance(allowance)) };
 
-        // Ensure enough balance
-        let from_balance = *self.balance_of[from].read();
-        if from_balance < amount { return Err(ERC20Error::InsufficientBalance(from_balance)) };
+            // Ensure enough balance
+            let mut from_balance = *self.balance_of[from];
+            if from_balance < amount { return Err(ERC20Error::InsufficientBalance(from_balance)) };
 
-        // Update state
-        *self.allowance_of[from][msg_sender].write() = allowance - amount;
-        self.balance_of.write(from, from_balance - amount);
-        self.balance_of.write(to, self.balance_of.read(to) + amount);
+            // Update state
+            allowance -= amount;
+            from_balance -= amount;
+            
+            let mut to_balance = *self.balance_of[to];
+            to_balance += amount;
+        }
 
         // Emit event + return 
         log::emit(Transfer::new(from, to, amount));
@@ -188,10 +195,10 @@ impl ERC20 {
     }
 
     pub fn balance_of(&self, owner: Address) -> U256 {
-        self.balance_of.read(owner)
+        *self.balance_of[owner]
     }
 
     pub fn allowance(&self, owner: Address, spender: Address) -> U256 {
-        self.allowance_of.read(owner).read(spender)
+        *self.allowance_of[owner][spender]
     }
 }

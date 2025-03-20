@@ -2,21 +2,21 @@ use alloc::boxed::Box;
 use core::{
     alloc::{GlobalAlloc, Layout},
     marker::PhantomData,
-    ops::{Deref, DerefMut, Index},
+    ops::{Deref, DerefMut, Index, IndexMut},
 };
 
 use crate::alloc::GLOBAL;
 
 use super::*;
 
-/// Implements a Solidity-like Mapping type.
+/// Implements a Solidity-like Mapping type
 #[derive(Default, Clone)]
-pub struct Mapping<K, V> {
+pub struct Mapping<K, S> {
     id: U256,
-    _pd: PhantomData<(K, V)>,
+    _pd: PhantomData<(K, S)>,
 }
 
-impl<K, V> StorageLayout for Mapping<K, V> {
+impl<K, S> StorageLayout for Mapping<K, S> {
     fn allocate(first: u64, second: u64, third: u64, fourth: u64) -> Self {
         Self {
             id: U256::from_limbs([first, second, third, fourth]),
@@ -25,7 +25,7 @@ impl<K, V> StorageLayout for Mapping<K, V> {
     }
 }
 
-impl<K, V> Mapping<K, V>
+impl<K, S> Mapping<K, S>
 where
     K: SolValue,
 {
@@ -46,48 +46,54 @@ where
     }
 }
 
-// Read guard - provides immutable access to a value
-pub struct MappingReadGuard<'a, V> {
-    value: Box<V>,
-    _phantom: PhantomData<&'a V>,
-}
-
-impl<'a, V> Deref for MappingReadGuard<'a, V> {
-    type Target = V;
-
-    fn deref(&self) -> &Self::Target {
-        &self.value
-    }
-}
-
-// Write guard - provides mutable access and writes back on drop
-pub struct MappingWriteGuard<'a, T, V>
+/// Implements a guard that handles both reading and writing for `Mapping`
+pub struct MappingGuard<S>
 where
-    T: StorageStorable<Value = V>,
-    V: SolValue + core::convert::From<<<V as SolValue>::SolType as SolType>::RustType> + Clone,
+    S: StorageStorable,
+    S::Value: SolValue + core::convert::From<<<S::Value as SolValue>::SolType as SolType>::RustType> + Clone,
 {
-    value: Box<V>,
+    value: Box<S::Value>,
     storage_key: U256,
     dirty: bool,
-    _phantom: PhantomData<&'a mut T>,
+    _phantom: PhantomData<S>,
 }
 
-impl<'a, T, V> Deref for MappingWriteGuard<'a, T, V>
+impl<S> MappingGuard<S>
 where
-    T: StorageStorable<Value = V>,
-    V: SolValue + core::convert::From<<<V as SolValue>::SolType as SolType>::RustType> + Clone,
+    S: StorageStorable,
+    S::Value: SolValue + core::convert::From<<<S::Value as SolValue>::SolType as SolType>::RustType> + Clone,
 {
-    type Target = V;
+    pub fn new(storage_key: U256) -> Self {
+        let value = S::__read(storage_key);
+        Self {
+            value: Box::new(value),
+            storage_key,
+            dirty: false,
+            _phantom: PhantomData,
+        }
+    }
+
+    pub fn write(&self, value: S::Value) {
+        S::__write(self.storage_key, value);
+    }
+}
+
+impl<S> Deref for MappingGuard<S>
+where
+    S: StorageStorable,
+    S::Value: SolValue + core::convert::From<<<S::Value as SolValue>::SolType as SolType>::RustType> + Clone,
+{
+    type Target = S::Value;
 
     fn deref(&self) -> &Self::Target {
         &self.value
     }
 }
 
-impl<'a, T, V> DerefMut for MappingWriteGuard<'a, T, V>
+impl<S> DerefMut for MappingGuard<S>
 where
-    T: StorageStorable<Value = V>,
-    V: SolValue + core::convert::From<<<V as SolValue>::SolType as SolType>::RustType> + Clone,
+    S: StorageStorable,
+    S::Value: SolValue + core::convert::From<<<S::Value as SolValue>::SolType as SolType>::RustType> + Clone,
 {
     fn deref_mut(&mut self) -> &mut Self::Target {
         self.dirty = true;
@@ -95,137 +101,126 @@ where
     }
 }
 
-impl<'a, T, V> Drop for MappingWriteGuard<'a, T, V>
+impl<S> Drop for MappingGuard<S>
 where
-    T: StorageStorable<Value = V>,
-    V: SolValue + core::convert::From<<<V as SolValue>::SolType as SolType>::RustType> + Clone,
+    S: StorageStorable,
+    S::Value: SolValue + core::convert::From<<<S::Value as SolValue>::SolType as SolType>::RustType> + Clone,
 {
     fn drop(&mut self) {
         if self.dirty {
             // Only write to storage if the value was modified
-            T::__write(self.storage_key, *self.value.clone());
+            S::__write(self.storage_key, (*self.value).clone());
         }
     }
 }
 
-// Accessor struct that provides read() and write() methods
-pub struct MappingProxy<T, V> {
-    storage_key: U256,
-    _pd: PhantomData<(T, V)>,
-}
-
-impl<T, V> MappingProxy<T, V>
-where
-    T: StorageStorable<Value = V>,
-    V: SolValue + core::convert::From<<<V as SolValue>::SolType as SolType>::RustType> + Clone,
-{
-    pub fn read(&self) -> MappingReadGuard<V> {
-        let value = T::__read(self.storage_key);
-        MappingReadGuard {
-            value: Box::new(value),
-            _phantom: PhantomData,
-        }
-    }
-
-    pub fn write(&self) -> MappingWriteGuard<T, V> {
-        let value = T::__read(self.storage_key);
-        MappingWriteGuard {
-            value: Box::new(value),
-            storage_key: self.storage_key,
-            dirty: false,
-            _phantom: PhantomData,
-        }
-    }
-}
-
-// Implementation for direct value mappings (e.g., Mapping<Address, Slot<U256>>)
-impl<K, T, V> Index<K> for Mapping<K, T>
+// Index implementation for direct value mappings
+impl<K, S> Index<K> for Mapping<K, S>
 where
     K: SolValue + 'static,
-    T: StorageStorable<Value = V>,
-    V: SolValue
-        + core::convert::From<<<V as SolValue>::SolType as SolType>::RustType>
-        + Clone
-        + 'static,
+    S: StorageStorable + 'static,
+    S::Value: SolValue + core::convert::From<<<S::Value as SolValue>::SolType as SolType>::RustType> + Clone + 'static,
 {
-    type Output = MappingProxy<T, V>;
+    type Output = MappingGuard<S>;
 
     fn index(&self, key: K) -> &Self::Output {
         let storage_key = self.encode_key(key);
 
-        // Create the accessor
-        let accessor = MappingProxy {
-            storage_key,
-            _pd: PhantomData,
-        };
+        // Create the guard
+        let guard = MappingGuard::<S>::new(storage_key);
 
-        // Allocate memory directly using the global allocator
+        // Manually handle memory using the global allocator
         unsafe {
-            // Calculate layout for the accessor
-            let layout = Layout::new::<MappingProxy<T, V>>();
+            // Calculate layout for the guard
+            // which holds the mapping value, key, and `dirty` flag
+            let layout = Layout::new::<MappingGuard<S>>();
 
-            // Allocate memory using GLOBAL
-            let ptr = GLOBAL.alloc(layout) as *mut MappingProxy<T, V>;
+            // Allocate using the `GLOBAL` fixed memory allocator
+            let ptr = GLOBAL.alloc(layout) as *mut MappingGuard<S>;
 
-            // Write the accessor to the allocated memory
-            ptr.write(accessor);
+            // Write the guard to the allocated memory
+            ptr.write(guard);
 
-            // Return a reference with 'static lifetime
-            // This is safe because our allocator never deallocates
+            // Return a reference with 'static lifetime (`GLOBAL` never deallocates)
             &*ptr
         }
     }
 }
 
-// Nested mapping accessor
-pub struct NestedMappingProxy<K2, V> {
-    mapping: Mapping<K2, V>,
+impl<K, S> IndexMut<K> for Mapping<K, S>
+where
+    K: SolValue + 'static,
+    S: StorageStorable + 'static,
+    S::Value: SolValue + core::convert::From<<<S::Value as SolValue>::SolType as SolType>::RustType> + Clone + 'static,
+{
+    fn index_mut(&mut self, key: K) -> &mut Self::Output {
+        let storage_key = self.encode_key(key);
+
+        // Create the guard
+        let guard = MappingGuard::<S>::new(storage_key);
+
+        // Manually handle memory using the global allocator
+        unsafe {
+            // Calculate layout for the guard
+            // which holds the mapping value, key, and `dirty` flag
+            let layout = Layout::new::<MappingGuard<S>>();
+
+            // Allocate using the `GLOBAL` fixed memory allocator
+            let ptr = GLOBAL.alloc(layout) as *mut MappingGuard<S>;
+
+            // Write the guard to the allocated memory
+            ptr.write(guard);
+
+            // Return a reference with 'static lifetime (`GLOBAL` never deallocates)
+            &mut *ptr
+        }
+    }
 }
 
-impl<K2, V> Deref for NestedMappingProxy<K2, V> {
-    type Target = Mapping<K2, V>;
+// Nested mapping support
+pub struct NestedMapping<K2, S> {
+    mapping: Mapping<K2, S>,
+}
+
+impl<K2, S> Deref for NestedMapping<K2, S> {
+    type Target = Mapping<K2, S>;
 
     fn deref(&self) -> &Self::Target {
         &self.mapping
     }
 }
 
-// Implementation for nested mappings (e.g., Mapping<Address, Mapping<Address, Slot<U256>>>)
-impl<K1, K2, V> Index<K1> for Mapping<K1, Mapping<K2, V>>
+// Index implementation for nested mappings
+impl<K1, K2, S> Index<K1> for Mapping<K1, Mapping<K2, S>>
 where
     K1: SolValue + 'static,
     K2: SolValue + 'static,
-    V: 'static,
+    S: 'static,
 {
-    type Output = NestedMappingProxy<K2, V>;
+    type Output = NestedMapping<K2, S>;
 
     fn index(&self, key: K1) -> &Self::Output {
-        let nested_id = self.encode_key(key);
+        let id = self.encode_key(key);
 
         // Create the nested mapping
-        let nested_mapping = Mapping {
-            id: nested_id,
-            _pd: PhantomData,
-        };
+        let mapping = Mapping { id, _pd: PhantomData };
+        let nested = NestedMapping { mapping };
 
-        // Create the nested proxy
-        let proxy = NestedMappingProxy {
-            mapping: nested_mapping,
-        };
-
-        // Allocate memory directly using the global allocator
+        // Manually handle memory using the global allocator
         unsafe {
-            // Calculate layout for the nested proxy
-            let layout = Layout::new::<NestedMappingProxy<K2, V>>();
+            // Calculate layout for the nested mapping
+            // which is an intermediate object that links to the inner-most mapping guard
+            let layout = Layout::new::<NestedMapping<K2, S>>();
 
-            // Allocate memory using GLOBAL
-            let ptr = GLOBAL.alloc(layout) as *mut NestedMappingProxy<K2, V>;
+            // Allocate using the `GLOBAL` fixed memory allocator
+            let ptr = GLOBAL.alloc(layout) as *mut NestedMapping<K2, S>;
 
-            // Write the nested proxy to the allocated memory
-            ptr.write(proxy);
+            // Write the nested mapping to the allocated memory
+            ptr.write(nested);
 
-            // Return a reference with 'static lifetime
+            // Return a reference with 'static lifetime (`GLOBAL` never deallocates)
             &*ptr
         }
     }
 }
+
