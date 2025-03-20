@@ -9,7 +9,7 @@ use crate::alloc::GLOBAL;
 use super::*;
 
 /// Implements a Solidity-like Mapping type.
-#[derive(Default, Clone)]
+#[derive(Default)]
 pub struct Mapping<K, S> {
     id: U256,
     _pd: PhantomData<(K, S)>,
@@ -52,7 +52,7 @@ where
 pub struct MappingGuard<S>
 where
     S: StorageStorable,
-    S::Value: SolValue + core::convert::From<<<S::Value as SolValue>::SolType as SolType>::RustType> + Clone,
+    S::Value: SolValue + core::convert::From<<<S::Value as SolValue>::SolType as SolType>::RustType>,
 {
     storage_key: U256,
     _phantom: PhantomData<S>,
@@ -61,7 +61,7 @@ where
 impl<S> MappingGuard<S>
 where
     S: StorageStorable,
-    S::Value: SolValue + core::convert::From<<<S::Value as SolValue>::SolType as SolType>::RustType> + Clone,
+    S::Value: SolValue + core::convert::From<<<S::Value as SolValue>::SolType as SolType>::RustType>,
 {
     pub fn new(storage_key: U256) -> Self {
         Self {
@@ -86,7 +86,7 @@ impl<K, S> Index<K> for Mapping<K, S>
 where
     K: SolValue + 'static,
     S: StorageStorable + 'static,
-    S::Value: SolValue + core::convert::From<<<S::Value as SolValue>::SolType as SolType>::RustType> + Clone + 'static,
+    S::Value: SolValue + core::convert::From<<<S::Value as SolValue>::SolType as SolType>::RustType> + 'static,
 {
     type Output = MappingGuard<S>;
 

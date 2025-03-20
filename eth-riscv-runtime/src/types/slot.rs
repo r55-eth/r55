@@ -3,7 +3,7 @@ use super::*;
 use core::ops::{Add, AddAssign, Sub, SubAssign};
 
 /// Wrapper around `alloy::primitives` that can be written in a single slot (single EVM word).
-#[derive(Default, Clone)]
+#[derive(Default)]
 pub struct Slot<V> {
     id: U256,
     _pd: PhantomData<V>,
