@@ -1,8 +1,7 @@
-use alloc::boxed::Box;
 use core::{
     alloc::{GlobalAlloc, Layout},
     marker::PhantomData,
-    ops::{Deref, DerefMut, Index, IndexMut},
+    ops::{Deref, Index}, 
 };
 
 use crate::alloc::GLOBAL;
@@ -52,9 +51,7 @@ where
     S: StorageStorable,
     S::Value: SolValue + core::convert::From<<<S::Value as SolValue>::SolType as SolType>::RustType> + Clone,
 {
-    value: Box<S::Value>,
     storage_key: U256,
-    dirty: bool,
     _phantom: PhantomData<S>,
 }
 
@@ -64,11 +61,8 @@ where
     S::Value: SolValue + core::convert::From<<<S::Value as SolValue>::SolType as SolType>::RustType> + Clone,
 {
     pub fn new(storage_key: U256) -> Self {
-        let value = S::__read(storage_key);
         Self {
-            value: Box::new(value),
             storage_key,
-            dirty: false,
             _phantom: PhantomData,
         }
     }
@@ -76,41 +70,9 @@ where
     pub fn write(&self, value: S::Value) {
         S::__write(self.storage_key, value);
     }
-}
 
-impl<S> Deref for MappingGuard<S>
-where
-    S: StorageStorable,
-    S::Value: SolValue + core::convert::From<<<S::Value as SolValue>::SolType as SolType>::RustType> + Clone,
-{
-    type Target = S::Value;
-
-    fn deref(&self) -> &Self::Target {
-        &self.value
-    }
-}
-
-impl<S> DerefMut for MappingGuard<S>
-where
-    S: StorageStorable,
-    S::Value: SolValue + core::convert::From<<<S::Value as SolValue>::SolType as SolType>::RustType> + Clone,
-{
-    fn deref_mut(&mut self) -> &mut Self::Target {
-        self.dirty = true;
-        &mut self.value
-    }
-}
-
-impl<S> Drop for MappingGuard<S>
-where
-    S: StorageStorable,
-    S::Value: SolValue + core::convert::From<<<S::Value as SolValue>::SolType as SolType>::RustType> + Clone,
-{
-    fn drop(&mut self) {
-        if self.dirty {
-            // Only write to storage if the value was modified
-            S::__write(self.storage_key, (*self.value).clone());
-        }
+    pub fn read(&self) -> S::Value {
+        S::__read(self.storage_key)
     }
 }
 
@@ -131,8 +93,7 @@ where
 
         // Manually handle memory using the global allocator
         unsafe {
-            // Calculate layout for the guard
-            // which holds the mapping value, key, and `dirty` flag
+            // Calculate layout for the guard which holds the mapping key
             let layout = Layout::new::<MappingGuard<S>>();
 
             // Allocate using the `GLOBAL` fixed memory allocator
@@ -143,36 +104,6 @@ where
 
             // Return a reference with 'static lifetime (`GLOBAL` never deallocates)
             &*ptr
-        }
-    }
-}
-
-impl<K, S> IndexMut<K> for Mapping<K, S>
-where
-    K: SolValue + 'static,
-    S: StorageStorable + 'static,
-    S::Value: SolValue + core::convert::From<<<S::Value as SolValue>::SolType as SolType>::RustType> + Clone + 'static,
-{
-    fn index_mut(&mut self, key: K) -> &mut Self::Output {
-        let storage_key = self.encode_key(key);
-
-        // Create the guard
-        let guard = MappingGuard::<S>::new(storage_key);
-
-        // Manually handle memory using the global allocator
-        unsafe {
-            // Calculate layout for the guard
-            // which holds the mapping value, key, and `dirty` flag
-            let layout = Layout::new::<MappingGuard<S>>();
-
-            // Allocate using the `GLOBAL` fixed memory allocator
-            let ptr = GLOBAL.alloc(layout) as *mut MappingGuard<S>;
-
-            // Write the guard to the allocated memory
-            ptr.write(guard);
-
-            // Return a reference with 'static lifetime (`GLOBAL` never deallocates)
-            &mut *ptr
         }
     }
 }
