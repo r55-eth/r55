@@ -94,12 +94,16 @@ impl ERC721 {
         // Perform sanity checks
         if to == Address::ZERO { return Err(ERC721Error::ZeroAddress) };
         if msg_sender() != self.owner.read() { return Err(ERC721Error::OnlyOwner) }; 
-        if self.owner_of.read(id) != Address::ZERO { return Err(ERC721Error::AlreadyMinted) };
+        if self.owner_of[id].read() != Address::ZERO { return Err(ERC721Error::AlreadyMinted) };
 
         // Update state
-        self.owner_of.write(id, to);
-        self.balance_of.write(to, self.balance_of.read(to) + U256::from(1));
-        self.total_supply.write(self.total_supply.read() + U256::from(1));
+        self.owner_of[id].write(to);
+        
+        let balance_to = self.balance_of[to].read();
+        self.balance_of[to].write(balance_to + U256::from(1));
+
+        let total_supply = self.total_supply.read();
+        self.total_supply.write(total_supply + U256::from(1));
         
         // Emit event + return
         log::emit(Transfer::new(Address::ZERO, to, id));
@@ -107,15 +111,15 @@ impl ERC721 {
     }
 
     pub fn approve(&mut self, spender: Address, id: U256) -> Result<bool, ERC721Error> {
-        let owner = self.owner_of.read(id);
+        let owner = self.owner_of[id].read();
         
         // Perform authorization check
-        if msg_sender() != owner && !self.is_operator.read(owner).read(msg_sender()) {
+        if msg_sender() != owner && !self.is_operator[owner][msg_sender()].read() {
             return Err(ERC721Error::Unauthorized);
         }
 
         // Update state
-        self.approval_of.write(id, spender);
+        self.approval_of[id].write(spender);
 
         // Emit event + return
         log::emit(Approval::new(owner, spender, id));
@@ -123,34 +127,38 @@ impl ERC721 {
     }
 
     pub fn set_approval_for_all(&mut self, operator: Address, approved: bool) -> Result<bool, ERC721Error> {
+        let msg_sender = msg_sender();
+
         // Update state
-        self.is_operator
-            .read(msg_sender())
-            .write(operator, approved);
+        self.is_operator[msg_sender][operator].write(approved);
 
         // Emit event + return
-        log::emit(ApprovalForAll::new(msg_sender(), operator, approved));
+        log::emit(ApprovalForAll::new(msg_sender, operator, approved));
         Ok(true)
     }
 
     pub fn transfer_from(&mut self, from: Address, to: Address, id: U256) -> Result<bool, ERC721Error> {
         // Perform sanity checks
-        if from != self.owner_of.read(id) { return Err(ERC721Error::WrongFrom) };
+        if from != self.owner_of[id].read() { return Err(ERC721Error::WrongFrom) };
         if to == Address::ZERO { return Err(ERC721Error::ZeroAddress) };
 
         // Check authorization
         let sender = msg_sender();
         if sender != from 
-            && !self.is_operator.read(from).read(sender)
-            && sender != self.approval_of.read(id) {
+            && !self.is_operator[from][sender].read()
+            && sender != self.approval_of[id].read() {
             return Err(ERC721Error::Unauthorized);
         }
 
         // Update state
-        self.owner_of.write(id, to);
-        self.balance_of.write(from, self.balance_of.read(from) - U256::from(1));
-        self.balance_of.write(to, self.balance_of.read(to) + U256::from(1));
-        self.approval_of.write(id, Address::ZERO);
+        self.owner_of[id].write(to);
+        self.approval_of[id].write(Address::ZERO);
+
+        let balance_from = self.balance_of[from].read();
+        self.balance_of[from].write(balance_from - U256::from(1));
+
+        let balance_to = self.balance_of[to].read();
+        self.balance_of[to].write(balance_to + U256::from(1));
 
         // Emit event + return
         log::emit(Transfer::new(from, to, id));
@@ -176,7 +184,7 @@ impl ERC721 {
     }
 
     pub fn owner_of(&self, id: U256) -> Result<Address, ERC721Error> {
-        let owner = self.owner_of.read(id);
+        let owner = self.owner_of[id].read();
         if owner == Address::ZERO {
             return Err(ERC721Error::NotMinted);
         }
@@ -187,15 +195,15 @@ impl ERC721 {
         if owner == Address::ZERO {
             return Err(ERC721Error::ZeroAddress);
         }
-        Ok(self.balance_of.read(owner))
+        Ok(self.balance_of[owner].read())
     }
 
     pub fn get_approved(&self, id: U256) -> Address {
-        self.approval_of.read(id)
+        self.approval_of[id].read()
     }
 
     pub fn is_approved_for_all(&self, owner: Address, operator: Address) -> bool {
-        self.is_operator.read(owner).read(operator)
+        self.is_operator[owner][operator].read()
     }
 
     pub fn total_supply(&self) -> U256 {

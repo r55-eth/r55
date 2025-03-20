@@ -8,7 +8,7 @@ use crate::alloc::GLOBAL;
 
 use super::*;
 
-/// Implements a Solidity-like Mapping type
+/// Implements a Solidity-like Mapping type.
 #[derive(Default, Clone)]
 pub struct Mapping<K, S> {
     id: U256,
@@ -28,7 +28,7 @@ impl<K, S> Mapping<K, S>
 where
     K: SolValue,
 {
-    pub fn encode_key(&self, key: K) -> U256 {
+    fn encode_key(&self, key: K) -> U256 {
         let key_bytes = key.abi_encode();
         let id_bytes: [u8; 32] = self.id.to_be_bytes();
 
@@ -45,7 +45,10 @@ where
     }
 }
 
-/// Implements a guard that handles both reading and writing for `Mapping`
+/// A guard that manages state interactions for Solidity-like mappings.
+/// 
+/// This type is returned when indexing into a `Mapping` and provides methods
+/// to read from and write to the underlying storage location.
 pub struct MappingGuard<S>
 where
     S: StorageStorable,
@@ -67,16 +70,18 @@ where
         }
     }
 
+    /// Writes the input value to storage (`SSTORE`) at the location specified by this guard.
     pub fn write(&self, value: S::Value) {
         S::__write(self.storage_key, value);
     }
 
+    /// Reads the value from storage (`SLOAD`) at the location specified by this guard.
     pub fn read(&self) -> S::Value {
         S::__read(self.storage_key)
     }
 }
 
-// Index implementation for direct value mappings
+/// Index implementation for direct value mappings.
 impl<K, S> Index<K> for Mapping<K, S>
 where
     K: SolValue + 'static,
@@ -108,7 +113,7 @@ where
     }
 }
 
-// Nested mapping support
+/// Helper struct to deal with nested mappings.
 pub struct NestedMapping<K2, S> {
     mapping: Mapping<K2, S>,
 }
@@ -121,7 +126,7 @@ impl<K2, S> Deref for NestedMapping<K2, S> {
     }
 }
 
-// Index implementation for nested mappings
+/// Index implementation for nested mappings.
 impl<K1, K2, S> Index<K1> for Mapping<K1, Mapping<K2, S>>
 where
     K1: SolValue + 'static,
@@ -154,4 +159,3 @@ where
         }
     }
 }
-
