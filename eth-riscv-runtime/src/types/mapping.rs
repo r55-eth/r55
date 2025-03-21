@@ -48,7 +48,7 @@ where
 /// A guard that manages state interactions for Solidity-like mappings.
 /// 
 /// This type is returned when indexing into a `Mapping` and provides methods
-/// to read from and write to the underlying storage location.
+/// to read/write from the underlying storage location.
 pub struct MappingGuard<V>
 where
     V: StorageStorable,
@@ -87,7 +87,7 @@ where
     }
 }
 
-/// Index implementation for direct value mappings.
+/// Index implementation for simple mappings.
 impl<K, V> Index<K> for Mapping<K, V>
 where
     K: SolValue + 'static,
@@ -119,7 +119,7 @@ where
     }
 }
 
-/// Index implementation for direct value mappings.
+/// Index implementation for simple mappings.
 impl<K, V> IndexMut<K> for Mapping<K, V>
 where
     K: SolValue + 'static,

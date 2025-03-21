@@ -19,7 +19,7 @@ pub use slot::Slot;
 ///     - `StorageLayout`: Allows the `storage` macro to allocate a storage slot.
 ///  > Must implement one of the following traits, for external consumption:
 ///     - `DirectStorage`:  Exposes read and write capabilities of values that are directly accessed.
-///     - `KeyValueStorage`:  Exposes read and write capabilities of values that are accesed by key.
+///     - `IndirectStorage`:  Exposes read and write capabilities of values that are gated by a guard.
 ///  > Unless it is a wrapper type (like `Mapping`) it must implement the following traits:
 ///     - `StorageStorable`: Allows db storage reads and writes with abi de/encoding.
 
@@ -39,7 +39,7 @@ pub trait StorageStorable {
     fn __write(key: U256, value: Self::Value);
 }
 
-/// Public interface for interacting with storage types (like `Slot`)
+/// Public interface for interacting with direct storage types (like `Slot`)
 pub trait DirectStorage<V>
 where
     Self: StorageStorable<Value = V>,
