@@ -210,4 +210,3 @@ impl ERC721 {
         self.total_supply.read()
     }
 }
-
