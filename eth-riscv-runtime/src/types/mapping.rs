@@ -1,3 +1,11 @@
+use core::{
+    alloc::{GlobalAlloc, Layout},
+    marker::PhantomData,
+    ops::{Deref, DerefMut, Index, IndexMut}, 
+};
+
+use crate::alloc::GLOBAL;
+
 use super::*;
 
 /// Implements a Solidity-like Mapping type.
@@ -20,7 +28,7 @@ impl<K, V> Mapping<K, V>
 where
     K: SolValue,
 {
-    pub fn encode_key(&self, key: K) -> U256 {
+    fn encode_key(&self, key: K) -> U256 {
         let key_bytes = key.abi_encode();
         let id_bytes: [u8; 32] = self.id.to_be_bytes();
 
@@ -37,43 +45,191 @@ where
     }
 }
 
-// Implementation for mappings that wrap `StorageStorable` types 
-impl<K, T, V> KeyValueStorage<K> for Mapping<K, T>
+/// A guard that manages state interactions for Solidity-like mappings.
+/// 
+/// This type is returned when indexing into a `Mapping` and provides methods
+/// to read/write from the underlying storage location.
+pub struct MappingGuard<V>
 where
-    K: SolValue,
-    T: StorageStorable<Value = V>,
-    V: SolValue + core::convert::From<<<V as SolValue>::SolType as SolType>::RustType>,
+    V: StorageStorable,
+    V::Value: SolValue + core::convert::From<<<V::Value as SolValue>::SolType as SolType>::RustType>,
 {
-    type ReadValue = V;
-    type WriteValue = V;
+    storage_key: U256,
+    _phantom: PhantomData<V>,
+}
 
-    fn read(&self, key: K) -> Self::ReadValue {
-        T::__read(self.encode_key(key))
-    }
-
-    fn write(&mut self, key: K, value: Self::WriteValue) {
-        T::__write(self.encode_key(key), value)
+impl<V> MappingGuard<V>
+where
+    V: StorageStorable,
+    V::Value: SolValue + core::convert::From<<<V::Value as SolValue>::SolType as SolType>::RustType>,
+{
+    pub fn new(storage_key: U256) -> Self {
+        Self {
+            storage_key,
+            _phantom: PhantomData,
+        }
     }
 }
 
-// Implementation for nested mappings
-impl<K1, K2, V> KeyValueStorage<K1> for Mapping<K1, Mapping<K2, V>>
+impl<V> IndirectStorage<V> for MappingGuard<V>
 where
-    K1: SolValue,
+    V: StorageStorable,
+    V::Value: SolValue + core::convert::From<<<V::Value as SolValue>::SolType as SolType>::RustType>,
 {
-    type ReadValue = Mapping<K2, V>;
-    type WriteValue = ();
-
-    fn read(&self, key: K1) -> Self::ReadValue {
-        Mapping {
-            id: self.encode_key(key),
-            _pd: PhantomData,
-        }
+    /// Writes the input value to storage (`SSTORE`) at the location specified by this guard.
+    fn write(&mut self, value: V::Value) {
+        V::__write(self.storage_key, value);
     }
 
-    // Mappings that store other mappings cannot be written to
-    // Only the lowest level mapping can store values on its `StorageStorable` wrapped type
-    fn write(&mut self, _key: K1, _value: Self::WriteValue) {
-        revert();
+    /// Reads the value from storage (`SLOAD`) at the location specified by this guard.
+    fn read(&self) -> V::Value {
+        V::__read(self.storage_key)
+    }
+}
+
+/// Index implementation for simple mappings.
+impl<K, V> Index<K> for Mapping<K, V>
+where
+    K: SolValue + 'static,
+    V: StorageStorable + 'static,
+    V::Value: SolValue + core::convert::From<<<V::Value as SolValue>::SolType as SolType>::RustType> + 'static,
+{
+    type Output = MappingGuard<V>;
+
+    fn index(&self, key: K) -> &Self::Output {
+        let storage_key = self.encode_key(key);
+
+        // Create the guard
+        let guard = MappingGuard::<V>::new(storage_key);
+
+        // Manually handle memory using the global allocator
+        unsafe {
+            // Calculate layout for the guard which holds the mapping key
+            let layout = Layout::new::<MappingGuard<V>>();
+
+            // Allocate using the `GLOBAL` fixed memory allocator
+            let ptr = GLOBAL.alloc(layout) as *mut MappingGuard<V>;
+
+            // Write the guard to the allocated memory
+            ptr.write(guard);
+
+            // Return a reference with 'static lifetime (`GLOBAL` never deallocates)
+            &*ptr
+        }
+    }
+}
+
+/// Index implementation for simple mappings.
+impl<K, V> IndexMut<K> for Mapping<K, V>
+where
+    K: SolValue + 'static,
+    V: StorageStorable + 'static,
+    V::Value: SolValue + core::convert::From<<<V::Value as SolValue>::SolType as SolType>::RustType> + 'static,
+{
+    fn index_mut(&mut self, key: K) -> &mut Self::Output {
+        let storage_key = self.encode_key(key);
+
+        // Create the guard
+        let guard = MappingGuard::<V>::new(storage_key);
+
+        // Manually handle memory using the global allocator
+        unsafe {
+            // Calculate layout for the guard which holds the mapping key
+            let layout = Layout::new::<MappingGuard<V>>();
+
+            // Allocate using the `GLOBAL` fixed memory allocator
+            let ptr = GLOBAL.alloc(layout) as *mut MappingGuard<V>;
+
+            // Write the guard to the allocated memory
+            ptr.write(guard);
+
+            // Return a reference with 'static lifetime (`GLOBAL` never deallocates)
+            &mut *ptr
+        }
+    }
+}
+
+/// Helper struct to deal with nested mappings.
+pub struct NestedMapping<K2, V> {
+    mapping: Mapping<K2, V>,
+}
+
+impl<K2, V> Deref for NestedMapping<K2, V> {
+    type Target = Mapping<K2, V>;
+
+    fn deref(&self) -> &Self::Target {
+        &self.mapping
+    }
+}
+
+impl<K2, V> DerefMut for NestedMapping<K2, V> {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.mapping
+    }
+}
+
+/// Index implementation for nested mappings.
+impl<K1, K2, V> Index<K1> for Mapping<K1, Mapping<K2, V>>
+where
+    K1: SolValue + 'static,
+    K2: SolValue + 'static,
+    V: 'static,
+{
+    type Output = NestedMapping<K2, V>;
+
+    fn index(&self, key: K1) -> &Self::Output {
+        let id = self.encode_key(key);
+
+        // Create the nested mapping
+        let mapping = Mapping { id, _pd: PhantomData };
+        let nested = NestedMapping { mapping };
+
+        // Manually handle memory using the global allocator
+        unsafe {
+            // Calculate layout for the nested mapping
+            // which is an intermediate object that links to the inner-most mapping guard
+            let layout = Layout::new::<NestedMapping<K2, V>>();
+
+            // Allocate using the `GLOBAL` fixed memory allocator
+            let ptr = GLOBAL.alloc(layout) as *mut NestedMapping<K2, V>;
+
+            // Write the nested mapping to the allocated memory
+            ptr.write(nested);
+
+            // Return a reference with 'static lifetime (`GLOBAL` never deallocates)
+            &*ptr
+        }
+    }
+}
+
+/// Index implementation for nested mappings.
+impl<K1, K2, V> IndexMut<K1> for Mapping<K1, Mapping<K2, V>>
+where
+    K1: SolValue + 'static,
+    K2: SolValue + 'static,
+    V: 'static,
+{
+    fn index_mut(&mut self, key: K1) -> &mut Self::Output {
+        let id = self.encode_key(key);
+
+        // Create the nested mapping
+        let mapping = Mapping { id, _pd: PhantomData };
+        let nested = NestedMapping { mapping };
+
+        // Manually handle memory using the global allocator
+        unsafe {
+            // Calculate layout for the nested mapping
+            // which is an intermediate object that links to the inner-most mapping guard
+            let layout = Layout::new::<NestedMapping<K2, V>>();
+
+            // Allocate using the `GLOBAL` fixed memory allocator
+            let ptr = GLOBAL.alloc(layout) as *mut NestedMapping<K2, V>;
+
+            // Write the nested mapping to the allocated memory
+            ptr.write(nested);
+
+            // Return a reference with 'static lifetime (`GLOBAL` never deallocates)
+            &mut *ptr
+        }
     }
 }
