@@ -39,7 +39,7 @@ pub trait StorageStorable {
     fn __write(key: U256, value: Self::Value);
 }
 
-/// Public interface for direct storage types (like `Slot`)
+/// Public interface for interacting with storage types (like `Slot`)
 pub trait DirectStorage<V>
 where
     Self: StorageStorable<Value = V>,
@@ -48,11 +48,12 @@ where
     fn write(&mut self, value: V);
 }
 
-/// Public interface for key-value storage types (like `Mapping`)
-pub trait KeyValueStorage<K> {
-    type ReadValue;
-    type WriteValue;
-
-    fn read(&self, key: K) -> Self::ReadValue;
-    fn write(&mut self, key: K, value: Self::WriteValue);
+/// Public interface for interacting with indirect storage types (like `MappingGuard`)
+pub trait IndirectStorage<V>
+where
+    V: StorageStorable,
+    V::Value: SolValue + core::convert::From<<<V::Value as SolValue>::SolType as SolType>::RustType>,
+{
+    fn read(&self) -> V::Value;
+    fn write(&mut self, value: V::Value);
 }
