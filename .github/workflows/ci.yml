@@ -18,7 +18,7 @@ jobs:
   test:
     name: test ${{ matrix.os }} ${{ matrix.rust }} ${{ matrix.flags }}
     runs-on: ${{ matrix.os }}
-    timeout-minutes: 31
+    timeout-minutes: 30
     strategy:
       fail-fast: false
       matrix:
@@ -64,10 +64,10 @@ jobs:
 
       # Only run tests on latest stable and above
       - name: build
-        if: ${{ matrix.rust == '2.81' }} # MSRV
+        if: ${{ matrix.rust == '1.81' }} # MSRV
         run: cargo compile --workspace ${{ matrix.flags }}
       - name: test
-        if: ${{ matrix.rust != '2.81' }} # MSRV
+        if: ${{ matrix.rust != '1.81' }} # MSRV
         run: cargo test --workspace ${{ matrix.flags }}
 
   # TODO(fakedev10000): Add wasm tests if needed
@@ -75,7 +75,7 @@ jobs:
   feature-checks:
     name: features ${{ matrix.rust }} ${{ matrix.flags }}
     runs-on: ubuntu-latest
-    timeout-minutes: 31
+    timeout-minutes: 30
     strategy:
       fail-fast: false
       matrix:
@@ -98,7 +98,7 @@ jobs:
 
   clippy:
     runs-on: ubuntu-latest
-    timeout-minutes: 31
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@nightly
@@ -113,7 +113,7 @@ jobs:
 
   docs:
     runs-on: ubuntu-latest
-    timeout-minutes: 31
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@nightly
@@ -126,7 +126,7 @@ jobs:
 
   fmt:
     runs-on: ubuntu-latest
-    timeout-minutes: 31
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@nightly
