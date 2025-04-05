@@ -429,10 +429,10 @@ pub fn contract(_attr: TokenStream, item: TokenStream) -> TokenStream {
 
     // Generate the complete output with module structure
     let output = quote! {
-        #![allow(unused_imports)]
-        #![allow(clippy::unreachable_code)]
-        #![allow(unreachable_code)]
-        #![allow(clippy::unreachable_code)]
+        #[allow(unused_imports)]
+        #[allow(clippy::unused_imports)]
+        #[allow(unreachable_code)]
+        #[allow(clippy::unreachable_code)]
         use eth_riscv_runtime::*;
         use alloy_sol_types::SolValue;
 
