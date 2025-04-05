@@ -10,6 +10,9 @@ pub const CALL_NEW_ACCOUNT: u64 = 2600;
 pub const CALL_VALUE: u64 = 9000;
 pub const CALL_BASE: u64 = 100;
 
+// Create-related costs
+pub const CREATE_BASE: u64 = 32000;
+
 // Macro to handle gas accounting for syscalls.
 // Returns OutOfGas InterpreterResult if gas limit is exceeded.
 #[macro_export]

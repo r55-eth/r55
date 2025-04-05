@@ -108,6 +108,7 @@ where
             let layout = Layout::new::<MappingGuard<V>>();
 
             // Allocate using the `GLOBAL` fixed memory allocator
+            #[allow(static_mut_refs)]
             let ptr = GLOBAL.alloc(layout) as *mut MappingGuard<V>;
 
             // Write the guard to the allocated memory
@@ -138,6 +139,7 @@ where
             let layout = Layout::new::<MappingGuard<V>>();
 
             // Allocate using the `GLOBAL` fixed memory allocator
+            #[allow(static_mut_refs)]
             let ptr = GLOBAL.alloc(layout) as *mut MappingGuard<V>;
 
             // Write the guard to the allocated memory
@@ -191,6 +193,7 @@ where
             let layout = Layout::new::<NestedMapping<K2, V>>();
 
             // Allocate using the `GLOBAL` fixed memory allocator
+            #[allow(static_mut_refs)]
             let ptr = GLOBAL.alloc(layout) as *mut NestedMapping<K2, V>;
 
             // Write the nested mapping to the allocated memory
@@ -223,6 +226,7 @@ where
             let layout = Layout::new::<NestedMapping<K2, V>>();
 
             // Allocate using the `GLOBAL` fixed memory allocator
+            #[allow(static_mut_refs)]
             let ptr = GLOBAL.alloc(layout) as *mut NestedMapping<K2, V>;
 
             // Write the nested mapping to the allocated memory

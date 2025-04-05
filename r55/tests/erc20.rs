@@ -1,16 +1,14 @@
 use alloy_primitives::{Address, B256, U256};
 use alloy_sol_types::SolValue;
 use r55::{
-    compile_deploy, compile_with_prefix,
     exec::{deploy_contract, run_tx},
+    get_bytecode,
     test_utils::{
         add_balance_to_db, get_calldata, get_selector_from_sig, initialize_logger, ALICE, BOB,
         CAROL,
     },
 };
 use revm::InMemoryDB;
-
-const ERC20_PATH: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/../examples/erc20");
 
 struct ERC20Setup {
     db: InMemoryDB,
@@ -29,7 +27,7 @@ fn erc20_setup(owner: Address) -> ERC20Setup {
 
     // Deploy contract
     let constructor = owner.abi_encode();
-    let bytecode = compile_with_prefix(compile_deploy, ERC20_PATH).unwrap();
+    let bytecode = get_bytecode("erc20");
     let token = deploy_contract(&mut db, bytecode, Some(constructor)).unwrap();
 
     ERC20Setup { db, token, owner }

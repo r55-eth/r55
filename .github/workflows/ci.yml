@@ -65,10 +65,10 @@ jobs:
       # Only run tests on latest stable and above
       - name: build
         if: ${{ matrix.rust == '1.81' }} # MSRV
-        run: cargo build --workspace ${{ matrix.flags }}
+        run: cargo compile --workspace ${{ matrix.flags }}
       - name: test
         if: ${{ matrix.rust != '1.81' }} # MSRV
-        run: cargo test --workspace ${{ matrix.flags }}
+        run: cargo compile && cargo test --workspace ${{ matrix.flags }}
 
   # TODO(fakedev9999): Add wasm tests if needed
 
@@ -90,6 +90,14 @@ jobs:
       - uses: Swatinem/rust-cache@v2
         with:
           cache-on-failure: true
+      - name: Install Dependencies
+        run: |
+          rustup install nightly-2025-01-07-x86_64-unknown-linux-gnu
+          rustup component add rust-src --toolchain nightly-2025-01-07-x86_64-unknown-linux-gnu
+          sudo apt-get update
+          sudo apt-get install -y gcc-riscv64-unknown-elf make device-tree-compiler
+      - name: cargo compile
+        run: cargo compile
       - name: cargo hack
         run: |
           args=(${{ matrix.flags }})
@@ -107,7 +115,14 @@ jobs:
       - uses: Swatinem/rust-cache@v2
         with:
           cache-on-failure: true
-      - run: cargo clippy --workspace --all-targets --all-features -- -D warnings
+      - name: Install Dependencies
+        run: |
+          rustup install nightly-2025-01-07-x86_64-unknown-linux-gnu
+          rustup component add rust-src --toolchain nightly-2025-01-07-x86_64-unknown-linux-gnu
+          sudo apt-get update
+          sudo apt-get install -y gcc-riscv64-unknown-elf make device-tree-compiler
+      - name: Install Dependencies
+        run: cargo compile && cargo clippy --workspace --all-targets --all-features -- -D warnings
         env:
           RUSTFLAGS: -D warnings
 
@@ -120,7 +135,13 @@ jobs:
       - uses: Swatinem/rust-cache@v2
         with:
           cache-on-failure: true
-      - run: cargo doc --workspace --all-features --no-deps --document-private-items
+      - name: Install Dependencies
+        run: |
+          rustup install nightly-2025-01-07-x86_64-unknown-linux-gnu
+          rustup component add rust-src --toolchain nightly-2025-01-07-x86_64-unknown-linux-gnu
+          sudo apt-get update
+          sudo apt-get install -y gcc-riscv64-unknown-elf make device-tree-compiler
+      - run: cargo compile && cargo doc --workspace --all-features --no-deps --document-private-items
         env:
           RUSTDOCFLAGS: "--cfg docsrs -D warnings"
 
