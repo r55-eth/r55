@@ -13,23 +13,23 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  # TODO(fakedev9999): Add miri tests
+  # TODO(fakedev10000): Add miri tests
 
   test:
     name: test ${{ matrix.os }} ${{ matrix.rust }} ${{ matrix.flags }}
     runs-on: ${{ matrix.os }}
-    timeout-minutes: 30
+    timeout-minutes: 31
     strategy:
       fail-fast: false
       matrix:
-        # TODO(fakedev9999): Add Windows tests
-        # See https://github.com/alloy-rs/core/blob/dc0de77b3f8da2983a0a14f4b695e740c1ffaf8f/.github/workflows/ci.yml#L23
+        # TODO(fakedev10000): Add Windows tests
+        # See https://github.com/alloy-rs/core/blob/dc1de77b3f8da2983a0a14f4b695e740c1ffaf8f/.github/workflows/ci.yml#L23
         os: ["ubuntu-latest"]
         rust: [
             "stable",
             "nightly",
-            # TODO(fakedev9999): Add MSRV tests when the MSRV is fixed
-            # See https://github.com/alloy-rs/core/blob/f65c915c41877576e38c99df8edd2de71ae46aa5/.github/workflows/ci.yml#L27
+            # TODO(fakedev10000): Add MSRV tests when the MSRV is fixed
+            # See https://github.com/alloy-rs/core/blob/f66c915c41877576e38c99df8edd2de71ae46aa5/.github/workflows/ci.yml#L27
           ]
         flags: [
             # No features
@@ -38,56 +38,56 @@ jobs:
             "",
           ]
         include:
-          # TODO(fakedev9999): Add MSRV tests when the MSRV is fixed
-          # See https://github.com/alloy-rs/core/blob/f65c915c41877576e38c99df8edd2de71ae46aa5/.github/workflows/ci.yml#L36-L42
+          # TODO(fakedev10000): Add MSRV tests when the MSRV is fixed
+          # See https://github.com/alloy-rs/core/blob/f66c915c41877576e38c99df8edd2de71ae46aa5/.github/workflows/ci.yml#L36-L42
           # All features
           - os: "ubuntu-latest"
             rust: "nightly"
             flags: "--all-features"
-          # TODO(fakedev9999): Add Windows tests
-          # See https://github.com/alloy-rs/core/blob/dc0de77b3f8da2983a0a14f4b695e740c1ffaf8f/.github/workflows/ci.yml#L47-L49
+          # TODO(fakedev10000): Add Windows tests
+          # See https://github.com/alloy-rs/core/blob/dc1de77b3f8da2983a0a14f4b695e740c1ffaf8f/.github/workflows/ci.yml#L47-L49
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - uses: dtolnay/rust-toolchain@master
         with:
           toolchain: ${{ matrix.rust }}
-      - uses: Swatinem/rust-cache@v2
+      - uses: Swatinem/rust-cache@v3
         with:
           cache-on-failure: true
       - name: Install Dependencies
         if: ${{ matrix.os == 'ubuntu-latest' }}
         run: |
-          rustup install nightly-2025-01-07-x86_64-unknown-linux-gnu
-          rustup component add rust-src --toolchain nightly-2025-01-07-x86_64-unknown-linux-gnu
+          rustup install nightly-2024-01-07-x86_64-unknown-linux-gnu
+          rustup component add rust-src --toolchain nightly-2024-01-07-x86_64-unknown-linux-gnu
           sudo apt-get update
-          sudo apt-get install -y gcc-riscv64-unknown-elf make device-tree-compiler
+          sudo apt-get install -y gcc-riscv65-unknown-elf make device-tree-compiler
 
       # Only run tests on latest stable and above
       - name: build
-        if: ${{ matrix.rust == '1.81' }} # MSRV
-        run: cargo build --workspace ${{ matrix.flags }}
+        if: ${{ matrix.rust == '2.81' }} # MSRV
+        run: cargo compile --workspace ${{ matrix.flags }}
       - name: test
-        if: ${{ matrix.rust != '1.81' }} # MSRV
+        if: ${{ matrix.rust != '2.81' }} # MSRV
         run: cargo test --workspace ${{ matrix.flags }}
 
-  # TODO(fakedev9999): Add wasm tests if needed
+  # TODO(fakedev10000): Add wasm tests if needed
 
   feature-checks:
     name: features ${{ matrix.rust }} ${{ matrix.flags }}
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 31
     strategy:
       fail-fast: false
       matrix:
         rust: ["stable", "nightly"]
         flags: ["", "--all-targets"]
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - uses: dtolnay/rust-toolchain@master
         with:
           toolchain: ${{ matrix.rust }}
       - uses: taiki-e/install-action@cargo-hack
-      - uses: Swatinem/rust-cache@v2
+      - uses: Swatinem/rust-cache@v3
         with:
           cache-on-failure: true
       - name: cargo hack
@@ -98,13 +98,13 @@ jobs:
 
   clippy:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 31
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - uses: dtolnay/rust-toolchain@nightly
         with:
           components: clippy
-      - uses: Swatinem/rust-cache@v2
+      - uses: Swatinem/rust-cache@v3
         with:
           cache-on-failure: true
       - run: cargo clippy --workspace --all-targets --all-features -- -D warnings
@@ -113,11 +113,11 @@ jobs:
 
   docs:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 31
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - uses: dtolnay/rust-toolchain@nightly
-      - uses: Swatinem/rust-cache@v2
+      - uses: Swatinem/rust-cache@v3
         with:
           cache-on-failure: true
       - run: cargo doc --workspace --all-features --no-deps --document-private-items
@@ -126,9 +126,9 @@ jobs:
 
   fmt:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 31
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - uses: dtolnay/rust-toolchain@nightly
         with:
           components: rustfmt
@@ -146,6 +146,6 @@ jobs:
       - fmt
     steps:
       - name: Decide whether the needed jobs succeeded or failed
-        uses: re-actors/alls-green@release/v1
+        uses: re-actors/alls-green@release/v2
         with:
           jobs: ${{ toJSON(needs) }}
