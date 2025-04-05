@@ -63,11 +63,19 @@ macro_rules! syscalls {
 // t0: 0x3e, opcode for returndatacopy, a0: memory offset, a1: return data offset, a2: return data size, returns nothing
 // t0: 0x54, opcode for sload, a0: storage key, returns 256-bit value
 // t0: 0x55, opcode for sstore, a0-a3: 256-bit storage key, a4-a7: 256-bit storage value, returns nothing
+// t0: 0xf0, opcode for create, args: a0: 64-bit value, a1: calldata offset, a2: calldata size, returns an address
 // t0: 0xf1, opcode for call, args: a0-a2: address, a3: 64-bit value, a4: calldata offset, a5: calldata size
 // t0: 0xfa, opcode for staticcall, args: a0-a2: address, a3: 64-bit value, a4: calldata offset, a5: calldata size
 // t0: 0xf3, opcode for return, a0: memory address of data, a1: length of data in bytes, doesn't return
 // t0: 0xfd, opcode for revert, doesn't return
+//
+// The following syscalls are R55 exceptions which do not correspond to any EVM opcode. 
+// Because of that, they use (unused) EVM opcodes which RISC-V already implements. 
+//
+// t0: 0x01, used to retrieve the created address cached in `RVEmu`
+
 syscalls!(
+    // EVM opcodes
     (0x20, Keccak256, "keccak256"),
     (0x32, Origin, "origin"),
     (0x33, Caller, "caller"),
@@ -82,9 +90,12 @@ syscalls!(
     (0x48, BaseFee, "basefee"),
     (0x54, SLoad, "sload"),
     (0x55, SStore, "sstore"),
+    (0xf0, Create, "create"),
     (0xf1, Call, "call"),
     (0xfa, StaticCall, "staticcall"),
     (0xf3, Return, "return"),
     (0xfd, Revert, "revert"),
     (0xA0, Log, "log"),
+    // R55 exceptions
+    (0x01, ReturnCreateAddress, "returncreateaddress"),
 );

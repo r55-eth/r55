@@ -1,0 +1,16 @@
+[package]
+name = "r55-compile"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+eyre.workspace = true
+thiserror.workspace = true
+
+tracing.workspace = true
+tracing-subscriber.workspace = true
+
+toml = "0.8"
+syn = { version = "1.0", features = ["full"] }

@@ -5,14 +5,14 @@ use eth_riscv_syscalls::Syscall;
 use revm::{
     handler::register::EvmHandler,
     interpreter::{
-        CallInputs, CallScheme, CallValue, Host, InstructionResult, Interpreter, InterpreterAction,
-        InterpreterResult, SharedMemory,
+        CallInputs, CallScheme, CallValue, CreateInputs, CreateScheme, Host, InstructionResult,
+        Interpreter, InterpreterAction, InterpreterResult, SharedMemory,
     },
     primitives::{address, Address, Bytes, ExecutionResult, Log, Output, TransactTo, B256, U256},
     Database, Evm, Frame, FrameOrResult, InMemoryDB,
 };
 use rvemu::{emulator::Emulator, exception::Exception};
-use std::{collections::BTreeMap, rc::Rc, sync::Arc};
+use std::{collections::BTreeMap, rc::Rc, sync::Arc, usize};
 use tracing::{debug, info, trace, warn};
 
 use super::error::{Error, Result, TxResult};
@@ -29,17 +29,17 @@ pub fn deploy_contract(
     let init_code = if Some(&0xff) == bytecode.first() {
         // Craft R55 initcode: [0xFF][codesize][bytecode][constructor_args]
         let codesize = U32::from(bytecode.len());
-        debug!("CODESIZE: {}", codesize);
+        debug!("[DEPLOY] BYTECODE SIZE: {}", codesize);
 
         let mut init_code = Vec::new();
         init_code.push(0xff);
         init_code.extend_from_slice(&Bytes::from(codesize.to_be_bytes_vec()));
         init_code.extend_from_slice(&bytecode);
         if let Some(args) = encoded_args {
-            debug!("ENCODED_ARGS: {:#?}", Bytes::from(args.clone()));
+            debug!("[DEPLOY] ENCODED_ARGS: {:#?}", Bytes::from(args.clone()));
             init_code.extend_from_slice(&args);
         }
-        debug!("INITCODE SIZE: {}", init_code.len());
+        debug!("[DEPLOY] INITCODE SIZE: {}", init_code.len());
         Bytes::from(init_code)
     } else {
         // do not modify bytecode for EVM contracts
@@ -55,9 +55,9 @@ pub fn deploy_contract(
             tx.data = init_code;
             tx.value = U256::from(0);
         })
+        .modify_cfg_env(|cfg| cfg.limit_contract_code_size = Some(usize::MAX))
         .append_handler_register(handle_register)
         .build();
-    evm.cfg_mut().limit_contract_code_size = Some(usize::MAX);
 
     let result = evm.transact_commit()?;
 
@@ -98,6 +98,7 @@ pub fn run_tx(
             tx.gas_price = U256::from(42);
             tx.gas_limit = 100_000_000;
         })
+        .modify_cfg_env(|cfg| cfg.limit_contract_code_size = Some(usize::MAX))
         .append_handler_register(handle_register)
         .build();
 
@@ -127,6 +128,7 @@ pub fn run_tx(
 #[derive(Debug)]
 struct RVEmu {
     emu: Emulator,
+    created_address: Option<Address> 
 }
 
 fn riscv_context(frame: &Frame) -> Option<RVEmu> {
@@ -154,7 +156,7 @@ fn riscv_context(frame: &Frame) -> Option<RVEmu> {
     };
 
     match setup_from_elf(code, calldata) {
-        Ok(emu) => Some(RVEmu { emu }),
+        Ok(emu) => Some(RVEmu { emu, created_address: None }),
         Err(err) => {
             warn!("Failed to setup from ELF: {err}");
             None
@@ -208,9 +210,14 @@ pub fn handle_register<EXT, DB: Database>(handler: &mut EvmHandler<'_, EXT, DB>)
             old_handle(frame, memory, instraction_table, ctx)?
         };
 
-        // if action is return, pop the stack.
+        // if action is return, pop the stack and potentially cache created address.
         if result.is_return() {
-            call_stack.borrow_mut().pop();
+            let mut stack = call_stack.borrow_mut();
+            stack.pop();
+
+            if let Some(Some(parent)) = stack.last_mut() {
+                parent.created_address = frame.created_address()
+            }
         }
 
         debug!("=== [Frame-{}] {:#?}", depth, frame.interpreter().gas);
@@ -274,6 +281,7 @@ fn execute_riscv(
                         syscall_gas!(interpreter, r55_gas);
 
                         let data_bytes = dram_slice(emu, ret_offset, ret_size)?;
+                        trace!("> RETURN: {}", Bytes::from(data_bytes.to_vec()));
 
                         return Ok(InterpreterAction::Return {
                             result: InterpreterResult {
@@ -357,6 +365,7 @@ fn execute_riscv(
                         emu.cpu.xregs.write(10, size as u64);
                     }
                     Syscall::ReturnDataCopy => {
+                        trace!("> RETURNDATA BUFFER: {}", &interpreter.return_data_buffer);
                         let dest_offset = emu.cpu.xregs.read(10);
                         let offset = emu.cpu.xregs.read(11) as usize;
                         let size = emu.cpu.xregs.read(12) as usize;
@@ -378,6 +387,19 @@ fn execute_riscv(
                     }
                     Syscall::Call => return execute_call(emu, interpreter, host, false),
                     Syscall::StaticCall => return execute_call(emu, interpreter, host, true),
+                    Syscall::Create => return execute_create(emu, interpreter, host),
+                    Syscall::ReturnCreateAddress => {
+                        debug!("> RETURNCREATEDADDRESS: {:?}", &rvemu.created_address);
+                        let dest_offset = emu.cpu.xregs.read(10);
+                        let addr = rvemu.created_address.expect("Unable to get created address");
+
+                        // write return data to memory
+                        let return_memory = emu
+                            .cpu
+                            .bus
+                            .get_dram_slice(dest_offset..(dest_offset + 20_u64))?;
+                        return_memory.copy_from_slice(addr.as_slice());
+                    }
                     Syscall::Revert => {
                         let ret_offset: u64 = emu.cpu.xregs.read(10);
                         let ret_size: u64 = emu.cpu.xregs.read(11);
@@ -606,6 +628,47 @@ fn execute_call(
             is_static,
             is_eof: false,
             return_memory_offset: 0..0, // handled with RETURNDATACOPY
+        }),
+    })
+}
+
+fn execute_create(
+    emu: &mut Emulator,
+    interpreter: &mut Interpreter,
+    _host: &mut dyn Host,
+) -> Result<InterpreterAction> {
+    let value: u64 = emu.cpu.xregs.read(10);
+
+    // Get initcode
+    let args_offset: u64 = emu.cpu.xregs.read(11);
+    let args_size: u64 = emu.cpu.xregs.read(12);
+    let init_code: Bytes = emu
+        .cpu
+        .bus
+        .get_dram_slice(args_offset..(args_offset + args_size))
+        .unwrap_or(&mut [])
+        .to_vec()
+        .into();
+
+    // TODO: calculate gas cost properly
+    let create_gas_cost = gas::CREATE_BASE;
+    syscall_gas!(interpreter, create_gas_cost);
+
+    // proactively spend gas limit as the remaining will be refunded (otherwise it underflows)
+    let create_gas_limit = interpreter.gas.remaining();
+    syscall_gas!(interpreter, create_gas_limit);
+
+    debug!("> CREATE CTX:");
+    debug!("  - Caller: {}", interpreter.contract.target_address);
+    debug!("  - Value: {}", value);
+    debug!("  - Initcode size: {:?}", init_code.len());
+    Ok(InterpreterAction::Create {
+        inputs: Box::new(CreateInputs {
+            init_code,
+            gas_limit: create_gas_limit,
+            caller: interpreter.contract.target_address,
+            value: U256::from(value),
+            scheme: CreateScheme::Create,
         }),
     })
 }
