@@ -68,7 +68,7 @@ jobs:
         run: cargo compile --workspace ${{ matrix.flags }}
       - name: test
         if: ${{ matrix.rust != '1.81' }} # MSRV
-        run: cargo test --workspace ${{ matrix.flags }}
+        run: cargo compile && cargo test --workspace ${{ matrix.flags }}
 
   # TODO(fakedev9999): Add wasm tests if needed
 
