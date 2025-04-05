@@ -47,11 +47,11 @@ jobs:
           # TODO(fakedev10000): Add Windows tests
           # See https://github.com/alloy-rs/core/blob/dc1de77b3f8da2983a0a14f4b695e740c1ffaf8f/.github/workflows/ci.yml#L47-L49
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@master
         with:
           toolchain: ${{ matrix.rust }}
-      - uses: Swatinem/rust-cache@v3
+      - uses: Swatinem/rust-cache@v2
         with:
           cache-on-failure: true
       - name: Install Dependencies
@@ -82,12 +82,12 @@ jobs:
         rust: ["stable", "nightly"]
         flags: ["", "--all-targets"]
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@master
         with:
           toolchain: ${{ matrix.rust }}
       - uses: taiki-e/install-action@cargo-hack
-      - uses: Swatinem/rust-cache@v3
+      - uses: Swatinem/rust-cache@v2
         with:
           cache-on-failure: true
       - name: cargo hack
@@ -100,11 +100,11 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 31
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@nightly
         with:
           components: clippy
-      - uses: Swatinem/rust-cache@v3
+      - uses: Swatinem/rust-cache@v2
         with:
           cache-on-failure: true
       - run: cargo clippy --workspace --all-targets --all-features -- -D warnings
@@ -115,9 +115,9 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 31
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@nightly
-      - uses: Swatinem/rust-cache@v3
+      - uses: Swatinem/rust-cache@v2
         with:
           cache-on-failure: true
       - run: cargo doc --workspace --all-features --no-deps --document-private-items
@@ -128,7 +128,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 31
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@nightly
         with:
           components: rustfmt
