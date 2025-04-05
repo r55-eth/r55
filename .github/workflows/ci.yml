@@ -107,7 +107,7 @@ jobs:
       - uses: Swatinem/rust-cache@v2
         with:
           cache-on-failure: true
-      - run: cargo clippy --workspace --all-targets --all-features -- -D warnings
+      - run: cargo compile && cargo clippy --workspace --all-targets --all-features -- -D warnings
         env:
           RUSTFLAGS: -D warnings
 
