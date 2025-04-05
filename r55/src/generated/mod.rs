@@ -5,7 +5,8 @@ use alloy_core::primitives::Bytes;
 use core::include_bytes;
 
 pub const ERC721_BYTECODE: &[u8] = include_bytes!("../../../r55-output-bytecode/erc721.bin");
-pub const EVM_CALLER_BYTECODE: &[u8] = include_bytes!("../../../r55-output-bytecode/evm-caller.bin");
+pub const EVM_CALLER_BYTECODE: &[u8] =
+    include_bytes!("../../../r55-output-bytecode/evm-caller.bin");
 pub const ERC20_BYTECODE: &[u8] = include_bytes!("../../../r55-output-bytecode/erc20.bin");
 pub const ERC20X_BYTECODE: &[u8] = include_bytes!("../../../r55-output-bytecode/erc20x.bin");
 
