@@ -1,5 +1,5 @@
-pub mod exec;
 mod error;
+pub mod exec;
 mod gas;
 
 mod generated;
@@ -9,7 +9,11 @@ pub mod test_utils;
 
 #[cfg(test)]
 mod tests {
-    use crate::{get_bytecode, test_utils::*, exec::{deploy_contract, run_tx}};
+    use crate::{
+        exec::{deploy_contract, run_tx},
+        get_bytecode,
+        test_utils::*,
+    };
 
     use alloy_core::hex::{self, ToHexExt};
     use alloy_primitives::B256;

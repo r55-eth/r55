@@ -69,8 +69,8 @@ macro_rules! syscalls {
 // t0: 0xf3, opcode for return, a0: memory address of data, a1: length of data in bytes, doesn't return
 // t0: 0xfd, opcode for revert, doesn't return
 //
-// The following syscalls are R55 exceptions which do not correspond to any EVM opcode. 
-// Because of that, they use (unused) EVM opcodes which RISC-V already implements. 
+// The following syscalls are R55 exceptions which do not correspond to any EVM opcode.
+// Because of that, they use (unused) EVM opcodes which RISC-V already implements.
 //
 // t0: 0x01, used to retrieve the created address cached in `RVEmu`
 

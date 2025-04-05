@@ -12,7 +12,7 @@ use revm::{
     Database, Evm, Frame, FrameOrResult, InMemoryDB,
 };
 use rvemu::{emulator::Emulator, exception::Exception};
-use std::{collections::BTreeMap, rc::Rc, sync::Arc, usize};
+use std::{collections::BTreeMap, rc::Rc, sync::Arc};
 use tracing::{debug, info, trace, warn};
 
 use super::error::{Error, Result, TxResult};
@@ -128,7 +128,7 @@ pub fn run_tx(
 #[derive(Debug)]
 struct RVEmu {
     emu: Emulator,
-    created_address: Option<Address> 
+    created_address: Option<Address>,
 }
 
 fn riscv_context(frame: &Frame) -> Option<RVEmu> {
@@ -156,7 +156,10 @@ fn riscv_context(frame: &Frame) -> Option<RVEmu> {
     };
 
     match setup_from_elf(code, calldata) {
-        Ok(emu) => Some(RVEmu { emu, created_address: None }),
+        Ok(emu) => Some(RVEmu {
+            emu,
+            created_address: None,
+        }),
         Err(err) => {
             warn!("Failed to setup from ELF: {err}");
             None
@@ -391,7 +394,9 @@ fn execute_riscv(
                     Syscall::ReturnCreateAddress => {
                         debug!("> RETURNCREATEDADDRESS: {:?}", &rvemu.created_address);
                         let dest_offset = emu.cpu.xregs.read(10);
-                        let addr = rvemu.created_address.expect("Unable to get created address");
+                        let addr = rvemu
+                            .created_address
+                            .expect("Unable to get created address");
 
                         // write return data to memory
                         let return_memory = emu

@@ -1,5 +1,3 @@
-#![no_std]
-
 extern crate alloc;
 use alloc::vec::Vec;
 use alloy_core::primitives::{Address, Bytes, U256};

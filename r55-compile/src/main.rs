@@ -38,12 +38,13 @@ fn main() -> eyre::Result<()> {
     info!(
         "Found {} R55 contracts (in compilation order):\n{}",
         contracts.len(),
-        contracts.iter()
+        contracts
+            .iter()
             .enumerate()
-            .map(|(i, c)| format!("  {}. {}", i+1, c))
+            .map(|(i, c)| format!("  {}. {}", i + 1, c))
             .collect::<Vec<_>>()
             .join("\n")
-    ); 
+    );
 
     // Compile each contract
     for contract in contracts {

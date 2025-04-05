@@ -1,5 +1,3 @@
-#![no_std]
-
 extern crate alloc;
 use alloy_core::primitives::{Address, Bytes, U32};
 use alloy_sol_types::{SolType, SolValue};

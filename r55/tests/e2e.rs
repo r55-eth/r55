@@ -1,9 +1,9 @@
-use alloy_primitives::{address, Address, Bytes, B256, U256};
+use alloy_primitives::{address, Address, Bytes, U256};
 use alloy_sol_types::SolValue;
 use r55::{
-    get_bytecode,
     exec::{deploy_contract, run_tx},
-    test_utils::{add_balance_to_db, get_selector_from_sig, initialize_logger}, 
+    get_bytecode,
+    test_utils::{add_balance_to_db, get_selector_from_sig, initialize_logger},
 };
 use revm::InMemoryDB;
 use tracing::{debug, error, info};
@@ -99,10 +99,15 @@ fn erc20x() {
     info!("----------------------------------------------------------");
     let mut complete_calldata_x_deploy = selector_x_deploy.to_vec();
     complete_calldata_x_deploy.append(&mut erc20x.abi_encode());
-    let (erc20, owner) = match run_tx(&mut db, &erc20x, complete_calldata_x_deploy.to_vec(), &alice) {
+    let (erc20, owner) = match run_tx(
+        &mut db,
+        &erc20x,
+        complete_calldata_x_deploy.to_vec(),
+        &alice,
+    ) {
         Ok(res) => (
             Address::from_slice(&res.output.as_slice()[12..32]),
-            Address::from_slice(&res.output.as_slice()[44..])
+            Address::from_slice(&res.output.as_slice()[44..]),
         ),
         Err(e) => {
             error!("Error when executing tx! {}", e);

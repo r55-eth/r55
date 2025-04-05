@@ -1,8 +1,8 @@
 use alloy_primitives::{Address, B256, U256};
 use alloy_sol_types::SolValue;
 use r55::{
-    get_bytecode,
     exec::{deploy_contract, run_tx},
+    get_bytecode,
     test_utils::{
         add_balance_to_db, get_calldata, get_selector_from_sig, initialize_logger, ALICE, BOB,
         CAROL,

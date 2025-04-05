@@ -1,4 +1,3 @@
-#![no_std]
 
 //! This module contains auto-generated code.
 //! Do not edit manually!

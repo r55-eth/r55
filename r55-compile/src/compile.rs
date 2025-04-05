@@ -1,8 +1,14 @@
-use std::{collections::HashMap, fmt, fs, io::Read, path::{Path, PathBuf}, process::Command};
-use tracing::{debug, error, info, warn};
-use toml::Value;
+use std::{
+    collections::HashMap,
+    fmt, fs,
+    io::Read,
+    path::{Path, PathBuf},
+    process::Command,
+};
+use syn::{Attribute, Item, ItemImpl};
 use thiserror::Error;
-use syn::{Item, ItemImpl, Attribute};
+use toml::Value;
+use tracing::{debug, error, info, warn};
 
 #[derive(Debug, Error)]
 pub enum ContractError {
@@ -19,7 +25,7 @@ pub enum ContractError {
     #[error("Invalid path")]
     WrongPath,
     #[error("Cyclic dependency")]
-    CyclicDependency
+    CyclicDependency,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -66,14 +72,14 @@ impl fmt::Display for ContractWithDeps {
     }
 }
 
-impl Into<Contract> for ContractWithDeps {
-    fn into(self) -> Contract {
+impl From<ContractWithDeps> for Contract {
+    fn from(value: ContractWithDeps) -> Contract {
         Contract {
-            name: self.name,
-            path: self.path
+            name: value.name,
+            path: value.path,
         }
     }
-} 
+}
 
 impl TryFrom<&PathBuf> for ContractWithDeps {
     type Error = ContractError;
@@ -180,7 +186,10 @@ impl TryFrom<&PathBuf> for ContractWithDeps {
                             .canonicalize()
                             .map_err(|_| ContractError::WrongPath)?;
                         contract_deps.push(Contract {
-                            name: ContractName { ident: String::new(), package: name.to_owned() },
+                            name: ContractName {
+                                ident: String::new(),
+                                package: name.to_owned(),
+                            },
                             path,
                         });
                     }
@@ -189,7 +198,10 @@ impl TryFrom<&PathBuf> for ContractWithDeps {
         }
 
         let contract = Self {
-            name: ContractName { ident: String::new(), package: name },
+            name: ContractName {
+                ident: String::new(),
+                package: name,
+            },
             deps: contract_deps,
             path: parent_dir.to_owned(),
         };
@@ -200,14 +212,16 @@ impl TryFrom<&PathBuf> for ContractWithDeps {
 
 impl Contract {
     pub fn path_str(&self) -> eyre::Result<&str> {
-        self.path.to_str().ok_or_else(|| eyre::eyre!("Failed to convert path to string {:?}", self.path))
+        self.path
+            .to_str()
+            .ok_or_else(|| eyre::eyre!("Failed to convert path to string {:?}", self.path))
     }
 
     pub fn compile_r55(&self) -> eyre::Result<Vec<u8>> {
         // First compile runtime
         self.compile_runtime()?;
 
-        // Then compile deployment code 
+        // Then compile deployment code
         let bytecode = self.compile_deploy()?;
         let mut prefixed_bytecode = vec![0xff]; // Add the 0xff prefix
         prefixed_bytecode.extend_from_slice(&bytecode);
@@ -241,7 +255,10 @@ impl Contract {
             info!("Cargo command completed successfully");
         }
 
-        let path = format!("{}/target/riscv64imac-unknown-none-elf/release/runtime", path);
+        let path = format!(
+            "{}/target/riscv64imac-unknown-none-elf/release/runtime",
+            path
+        );
         let mut file = match fs::File::open(path) {
             Ok(file) => file,
             Err(e) => {
@@ -287,7 +304,10 @@ impl Contract {
             info!("Cargo command completed successfully");
         }
 
-        let path = format!("{}/target/riscv64imac-unknown-none-elf/release/deploy", path);
+        let path = format!(
+            "{}/target/riscv64imac-unknown-none-elf/release/deploy",
+            path
+        );
         let mut file = match fs::File::open(path) {
             Ok(file) => file,
             Err(e) => {
@@ -333,70 +353,84 @@ pub fn find_r55_contracts(dir: &Path) -> HashMap<bool, Vec<ContractWithDeps>> {
                     let ident = match find_contract_ident(&lib_path) {
                         Ok(ident) => ident,
                         Err(e) => {
-                            error!("Unable to find contract identifier at {:?}: {:?}", lib_path, e);
+                            error!(
+                                "Unable to find contract identifier at {:?}: {:?}",
+                                lib_path, e
+                            );
                             continue;
                         }
                     };
-                    debug!("Found R55 contract: ({} with ident: {}) at {:?}", contract.name.package, ident, contract.path);
+                    debug!(
+                        "Found R55 contract: ({} with ident: {}) at {:?}",
+                        contract.name.package, ident, contract.path
+                    );
                     temp_idents.insert(contract.path.to_owned(), ident);
                     temp_contracts.push(contract);
                 }
                 Err(ContractError::MissingDependencies) => continue,
                 Err(ContractError::MissingBinaries) => continue,
                 Err(ContractError::MissingFeatures) => continue,
-                Err(e) => warn!("Error parsing potential contract at {:?}: {:?}", cargo_path, e),
+                Err(e) => warn!(
+                    "Error parsing potential contract at {:?}: {:?}",
+                    cargo_path, e
+                ),
             }
         }
 
-        // Set the identifiers for the contract and its dependencies 
+        // Set the identifiers for the contract and its dependencies
         for mut contract in temp_contracts {
             if let Some(ident) = temp_idents.get(&contract.path) {
                 contract.name.ident = ident.to_owned();
             }
-            
+
             for dep in &mut contract.deps {
                 if let Some(ident) = temp_idents.get(&dep.path) {
                     dep.name.ident = ident.to_owned();
                 }
             }
 
-            contracts.entry(contract.deps.is_empty()).or_default().push(contract)
+            contracts
+                .entry(contract.deps.is_empty())
+                .or_default()
+                .push(contract)
         }
     }
 
     contracts
 }
 
-pub fn sort_r55_contracts(mut map: HashMap<bool, Vec<ContractWithDeps>>) -> Result<Vec<Contract>, ContractError> {
+pub fn sort_r55_contracts(
+    mut map: HashMap<bool, Vec<ContractWithDeps>>,
+) -> Result<Vec<Contract>, ContractError> {
     // Add contracts without dependencies to the compilation queue
     let mut queue: Vec<Contract> = match map.remove(&true) {
         Some(contracts) => contracts.into_iter().map(|c| c.into()).collect(),
-        None => vec![]
+        None => vec![],
     };
     debug!("{} Contracts without deps", queue.len());
 
-    // Contracts with dependencies can only be added when their dependencies are already in the queue 
+    // Contracts with dependencies can only be added when their dependencies are already in the queue
     let mut pending = map.remove(&false).unwrap_or_default();
     debug!("{} Contracts with deps", pending.len());
 
-        while !pending.is_empty() {
-            let prev_pending = pending.len();
+    while !pending.is_empty() {
+        let prev_pending = pending.len();
 
-            let mut next_pending = Vec::new();
-            for p in pending.into_iter() {
-               if all_handled(&p.deps, &queue) {
-                    queue.push(p.to_owned().into());
-                } else {
-                    next_pending.push(p);
-                }
-            }
-            pending = next_pending;
-
-            // If no contracts were processed, there is a cyclical dependency
-            if prev_pending == pending.len() {
-                return Err(ContractError::CyclicDependency);
+        let mut next_pending = Vec::new();
+        for p in pending.into_iter() {
+            if all_handled(&p.deps, &queue) {
+                queue.push(p.to_owned().into());
+            } else {
+                next_pending.push(p);
             }
         }
+        pending = next_pending;
+
+        // If no contracts were processed, there is a cyclical dependency
+        if prev_pending == pending.len() {
+            return Err(ContractError::CyclicDependency);
+        }
+    }
 
     Ok(queue)
 }
@@ -405,7 +439,7 @@ fn all_handled(deps: &[Contract], handled: &[Contract]) -> bool {
     for d in deps {
         if !handled.contains(d) {
             return false;
-        } 
+        }
     }
 
     true
@@ -415,7 +449,7 @@ pub fn find_contract_ident(file_path: &Path) -> eyre::Result<String> {
     // Read and parse the file content
     let content = fs::read_to_string(file_path)?;
     let file = syn::parse_file(&content)?;
-    
+
     // Look for impl blocks with #[contract] attribute
     for item in file.items {
         if let Item::Impl(item_impl) = item {
@@ -428,15 +462,15 @@ pub fn find_contract_ident(file_path: &Path) -> eyre::Result<String> {
             }
         }
     }
-    
+
     eyre::bail!("No contract implementation found in file: {:?}", file_path)
 }
 
 // Check if attributes contain #[contract]
 fn has_contract_attribute(attrs: &[Attribute]) -> bool {
-    attrs.iter().any(|attr| {
-        attr.path.segments.len() == 1 && attr.path.segments[0].ident == "contract"
-    })
+    attrs
+        .iter()
+        .any(|attr| attr.path.segments.len() == 1 && attr.path.segments[0].ident == "contract")
 }
 
 // Extract the type name from its impl block
@@ -446,7 +480,7 @@ fn extract_ident(item_impl: &ItemImpl) -> Option<String> {
             // Get the last segment of the path (the type name)
             let segment = type_path.path.segments.last().unwrap();
             Some(segment.ident.to_string())
-        },
+        }
         _ => None,
     }
 }
