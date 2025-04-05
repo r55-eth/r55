@@ -13,7 +13,7 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  # TODO(fakedev10000): Add miri tests
+  # TODO(fakedev9999): Add miri tests
 
   test:
     name: test ${{ matrix.os }} ${{ matrix.rust }} ${{ matrix.flags }}
@@ -22,14 +22,14 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        # TODO(fakedev10000): Add Windows tests
-        # See https://github.com/alloy-rs/core/blob/dc1de77b3f8da2983a0a14f4b695e740c1ffaf8f/.github/workflows/ci.yml#L23
+        # TODO(fakedev9999): Add Windows tests
+        # See https://github.com/alloy-rs/core/blob/dc0de77b3f8da2983a0a14f4b695e740c1ffaf8f/.github/workflows/ci.yml#L23
         os: ["ubuntu-latest"]
         rust: [
             "stable",
             "nightly",
-            # TODO(fakedev10000): Add MSRV tests when the MSRV is fixed
-            # See https://github.com/alloy-rs/core/blob/f66c915c41877576e38c99df8edd2de71ae46aa5/.github/workflows/ci.yml#L27
+            # TODO(fakedev9999): Add MSRV tests when the MSRV is fixed
+            # See https://github.com/alloy-rs/core/blob/f65c915c41877576e38c99df8edd2de71ae46aa5/.github/workflows/ci.yml#L27
           ]
         flags: [
             # No features
@@ -38,14 +38,14 @@ jobs:
             "",
           ]
         include:
-          # TODO(fakedev10000): Add MSRV tests when the MSRV is fixed
-          # See https://github.com/alloy-rs/core/blob/f66c915c41877576e38c99df8edd2de71ae46aa5/.github/workflows/ci.yml#L36-L42
+          # TODO(fakedev9999): Add MSRV tests when the MSRV is fixed
+          # See https://github.com/alloy-rs/core/blob/f65c915c41877576e38c99df8edd2de71ae46aa5/.github/workflows/ci.yml#L36-L42
           # All features
           - os: "ubuntu-latest"
             rust: "nightly"
             flags: "--all-features"
-          # TODO(fakedev10000): Add Windows tests
-          # See https://github.com/alloy-rs/core/blob/dc1de77b3f8da2983a0a14f4b695e740c1ffaf8f/.github/workflows/ci.yml#L47-L49
+          # TODO(fakedev9999): Add Windows tests
+          # See https://github.com/alloy-rs/core/blob/dc0de77b3f8da2983a0a14f4b695e740c1ffaf8f/.github/workflows/ci.yml#L47-L49
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@master
@@ -57,8 +57,8 @@ jobs:
       - name: Install Dependencies
         if: ${{ matrix.os == 'ubuntu-latest' }}
         run: |
-          rustup install nightly-2024-01-07-x86_64-unknown-linux-gnu
-          rustup component add rust-src --toolchain nightly-2024-01-07-x86_64-unknown-linux-gnu
+          rustup install nightly-2025-01-07-x86_64-unknown-linux-gnu
+          rustup component add rust-src --toolchain nightly-2025-01-07-x86_64-unknown-linux-gnu
           sudo apt-get update
           sudo apt-get install -y gcc-riscv64-unknown-elf make device-tree-compiler
 
@@ -70,7 +70,7 @@ jobs:
         if: ${{ matrix.rust != '1.81' }} # MSRV
         run: cargo test --workspace ${{ matrix.flags }}
 
-  # TODO(fakedev10000): Add wasm tests if needed
+  # TODO(fakedev9999): Add wasm tests if needed
 
   feature-checks:
     name: features ${{ matrix.rust }} ${{ matrix.flags }}
