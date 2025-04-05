@@ -429,6 +429,8 @@ pub fn contract(_attr: TokenStream, item: TokenStream) -> TokenStream {
 
     // Generate the complete output with module structure
     let output = quote! {
+        #[allow(unused_imports)]
+        #[allow(unreachable_code)]
         use eth_riscv_runtime::*;
         use alloy_sol_types::SolValue;
 

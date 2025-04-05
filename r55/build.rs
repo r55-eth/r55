@@ -12,7 +12,8 @@ fn main() {
     }
 
     // Generate `r55/generated/mod.rs` code to get compiled bytecode for tests
-    let mut generated = String::from(r#"
+    let mut generated = String::from(
+        r#"
 //! This module contains auto-generated code.
 //! Do not edit manually!
 

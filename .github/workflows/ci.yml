@@ -96,6 +96,8 @@ jobs:
           rustup component add rust-src --toolchain nightly-2025-01-07-x86_64-unknown-linux-gnu
           sudo apt-get update
           sudo apt-get install -y gcc-riscv64-unknown-elf make device-tree-compiler
+      - name: cargo compile
+        run: cargo compile
       - name: cargo hack
         run: |
           args=(${{ matrix.flags }})
@@ -139,7 +141,7 @@ jobs:
           rustup component add rust-src --toolchain nightly-2025-01-07-x86_64-unknown-linux-gnu
           sudo apt-get update
           sudo apt-get install -y gcc-riscv64-unknown-elf make device-tree-compiler
-      - run: cargo doc --workspace --all-features --no-deps --document-private-items
+      - run: cargo compile && cargo doc --workspace --all-features --no-deps --document-private-items
         env:
           RUSTDOCFLAGS: "--cfg docsrs -D warnings"
 
