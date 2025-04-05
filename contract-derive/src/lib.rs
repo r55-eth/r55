@@ -429,10 +429,6 @@ pub fn contract(_attr: TokenStream, item: TokenStream) -> TokenStream {
 
     // Generate the complete output with module structure
     let output = quote! {
-        #[allow(unused_imports)]
-        #[allow(clippy::unused_imports)]
-        #[allow(unreachable_code)]
-        #[allow(clippy::unreachable_code)]
         use eth_riscv_runtime::*;
         use alloy_sol_types::SolValue;
 
@@ -458,6 +454,8 @@ pub fn contract(_attr: TokenStream, item: TokenStream) -> TokenStream {
         // only when not in `interface-only` mode
         #[cfg(not(any(feature = "deploy", feature = "interface-only")))]
         #[allow(non_local_definitions)]
+        #[allow(unused_imports)]
+        #[allow(unreachable_code)]
         mod implementation {
             use super::*;
             use alloy_sol_types::SolValue;

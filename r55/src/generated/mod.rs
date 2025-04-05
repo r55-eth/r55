@@ -1,4 +1,3 @@
-
 //! This module contains auto-generated code.
 //! Do not edit manually!
 
@@ -16,7 +15,7 @@ pub fn get_bytecode(contract_name: &str) -> Bytes {
         "evm_caller" => EVM_CALLER_BYTECODE,
         "erc20" => ERC20_BYTECODE,
         "erc20x" => ERC20X_BYTECODE,
-        _ => return Bytes::new()
+        _ => return Bytes::new(),
     };
 
     Bytes::from(initcode)

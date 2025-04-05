@@ -13,8 +13,7 @@ fn main() {
 
     // Generate `r55/generated/mod.rs` code to get compiled bytecode for tests
     let mut generated = String::from(
-        r#"
-//! This module contains auto-generated code.
+        r#"//! This module contains auto-generated code.
 //! Do not edit manually!
 
 use alloy_core::primitives::Bytes;
@@ -57,7 +56,7 @@ use core::include_bytes;
     }
 
     generated.push_str(
-        r#"        _ => return Bytes::new()
+        r#"        _ => return Bytes::new(),
     };
 
     Bytes::from(initcode)
