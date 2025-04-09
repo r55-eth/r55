@@ -9,4 +9,8 @@ pub enum Error {
     /// [`goblin`] crate error representation
     #[error(transparent)]
     GoblinError(#[from] goblin::error::Error),
+    
+    /// [`InterpreterError`] representation for compatibility
+    #[error(transparent)]
+    InterpreterError(#[from] crate::interpreter::InterpreterError),
 }

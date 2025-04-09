@@ -6,11 +6,24 @@ license.workspace = true
 repository.workspace = true
 
 [dependencies]
-rvemu = { git="https://github.com/r55-eth/rvemu.git"}
+thiserror = { workspace = true }
+goblin = { version = "0.8.2", default-features = false, features = ["std", "elf32", "elf64", "endian_fd"] }
 
-thiserror.workspace = true
+# Optional dependencies based on selected backend
+rvemu = { git = "https://github.com/r55-eth/rvemu.git", optional = true }
+unicorn-engine = { version = "2.0", optional = true }
 
-goblin = { version = "0.8.2", features = ["std"] }
+# For no_std support - you don't need this external dependency
+# alloc-crate = { package = "alloc", version = "1.0.0", optional = true}
+
+[features]
+default = ["std", "rvemu-backend"]
+# Remove alloc from the std feature list since it's not defined
+std = ["goblin/std"]
+# Define a separate no_std feature if needed
+no_std = []
+rvemu-backend = ["rvemu", "std"]
+unicorn-backend = ["unicorn-engine", "std"]
 
 [dev-dependencies]
 eyre.workspace = true
