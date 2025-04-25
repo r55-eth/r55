@@ -1,11 +1,13 @@
-mod compile;
-use compile::{find_r55_contracts, sort_r55_contracts};
+mod ast;
+mod generate;
+mod helpers;
+mod types;
 
-mod deployable;
-use deployable::generate_deployable;
+use generate::{generate_deployable, generate_temp_crates};
+use helpers::{find_r55_projects, sort_generated_contracts};
 
 use std::{fs, path::Path};
-use tracing::info;
+use tracing::{debug, info};
 
 fn main() -> eyre::Result<()> {
     // Initialize logging
@@ -15,44 +17,54 @@ fn main() -> eyre::Result<()> {
         .finish();
     tracing::subscriber::set_global_default(tracing_sub)?;
 
-    // Setup output directory
+    // Setup output directory for the compiled bytecode
     let project_root = Path::new(env!("CARGO_MANIFEST_DIR")).parent().unwrap();
     let output_dir = project_root.join("r55-output-bytecode");
     fs::create_dir_all(&output_dir)?;
 
-    // TODO: discuss with Leo and Georgios how would importing r55 as a dependency for SC development should look like
-    // Find all R55 contracts in examples directory
-    let examples_dir = project_root.join("examples");
-    let contracts = find_r55_contracts(&examples_dir);
+    // Setup temporary directory for the generated crates
+    let temp_dir = project_root.join("target").join("r55-generated");
+    fs::create_dir_all(&temp_dir)?;
 
-    // Generate deployable files for the dependencies
-    if let Some(contracts_with_deps) = contracts.get(&false) {
-        for c in contracts_with_deps {
-            generate_deployable(c)?;
+    // Find all R55 projects under the examples directory
+    let target_dir = project_root.join("examples");
+    let projects = find_r55_projects(&target_dir)?;
+
+    // Log discovered examples and their contracts
+    info!("Found {} R55 project:", projects.len());
+    for (i, example) in projects.iter().enumerate() {
+        info!(
+            "  {}. {} with {} contracts:",
+            i + 1,
+            example.name,
+            example.targets.len()
+        );
+        for target in &example.targets {
+            info!("     - {}", target.ident);
         }
     }
 
-    // Sort contracts in the correct compilation order
-    let contracts = sort_r55_contracts(contracts)?;
+    // Generate temp version of all R55 contracts
+    let generated_contracts = generate_temp_crates(&projects, &temp_dir, project_root)?;
+    debug!("GENERATED CONTRACTS:");
+    for (i, contract) in generated_contracts.iter().enumerate() {
+        debug!(" {}. {:?}", i, contract);
+    }
 
-    info!(
-        "Found {} R55 contracts (in compilation order):\n{}",
-        contracts.len(),
-        contracts
-            .iter()
-            .enumerate()
-            .map(|(i, c)| format!("  {}. {}", i + 1, c))
-            .collect::<Vec<_>>()
-            .join("\n")
-    );
+    // Compile each contract in order
+    let sorted_contracts = sort_generated_contracts(generated_contracts)?;
+    for contract in sorted_contracts {
+        info!("Generating deployable.rs for contract: {}", contract.name);
 
-    // Compile each contract
-    for contract in contracts {
-        info!("Compiling contract: {}", contract.name.ident);
+        // Generate `deployable.rs` in the working dir, and the temp one
+        generate_deployable(&contract, true)?;
+        generate_deployable(&contract, false)?;
 
         // Compile deployment code and save in the file
-        let deploy_bytecode = contract.compile_r55()?;
-        let deploy_path = output_dir.join(format!("{}.bin", contract.name.package));
+        info!("Compiling: {}", contract.name);
+        let deploy_bytecode = contract.compile()?;
+        let deploy_path = output_dir.join(format!("{}.bin", contract.name));
+
         fs::write(deploy_path, deploy_bytecode)?;
     }
 

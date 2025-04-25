@@ -55,6 +55,7 @@ macro_rules! syscalls {
 // as described on https://www.evm.codes.
 //
 // t0: 0x20, opcode for keccak256, a0: offset, a1: size, returns keccak256 hash
+// t0: 0x30, opcode for address, returns an address
 // t0: 0x32, opcode for origin, returns an address
 // t0: 0x33, opcode for caller, returns an address
 // t0: 0x34, opcode for callvalue, a0: first limb, a1: second limb, a2: third limb, a3: fourth limb, returns 256-bit value
@@ -77,6 +78,7 @@ macro_rules! syscalls {
 syscalls!(
     // EVM opcodes
     (0x20, Keccak256, "keccak256"),
+    (0x30, Address, "address"),
     (0x32, Origin, "origin"),
     (0x33, Caller, "caller"),
     (0x34, CallValue, "callvalue"),
