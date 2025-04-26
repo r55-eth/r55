@@ -7,12 +7,19 @@ use core::str::FromStr;
 
 use alloc::vec;
 use contract_derive::{contract, interface, payable, storage, Error, Event};
-use eth_riscv_runtime::{block::{chain_id, timestamp}, types::*, *};
+use eth_riscv_runtime::{
+    block::{chain_id, timestamp},
+    types::*,
+    *,
+};
 
-use alloy_core::primitives::{address, keccak256 as alloy_keccak, Address, Bytes, B256, U256, U8};
+use alloy_core::primitives::{address, Address, Bytes, B256, U256, U8};
 use erc20::IERC20;
 
-use crate::{math::{mul_div, sqrt, MathError}, IUniswapV2Callee, IUniswapV2Factory};
+use crate::{
+    math::{mul_div, sqrt, MathError},
+    IUniswapV2Callee, IUniswapV2Factory,
+};
 
 // -- EVENTS -------------------------------------------------------------------
 #[derive(Event)]
@@ -143,14 +150,15 @@ impl UniswapV2Pair {
 
         // Set factory as deployer
         pair.factory.write(msg_sender());
+        pair.lock.initialize();
 
-        // // Calculate domain separator for EIP-712
-        // // TODO: implement a user-frendly version of keccack256 -> it should use `Bytes` rather than a raw pointer
-        // let domain_separator = alloy_core::primitives::keccak256(
+        // Calculate domain separator for EIP-712
+        // TODO: implement a user-frendly version of keccack256 -> it should use `Bytes` rather than a raw pointer
+        // let domain_separator = keccak256(
         //     (
-        //         alloy_keccak("EIP712Domain(string name,string version,uint256 chainId,address verifyingContract)"),
-        //         alloy_keccak(Bytes::from_str("Uniswap V2").unwrap()),
-        //         alloy_keccak(Bytes::from_str("1").unwrap()),
+        //         keccak("EIP712Domain(string name,string version,uint256 chainId,address verifyingContract)"),
+        //         keccak(Bytes::from_str("Uniswap V2").unwrap()),
+        //         keccak(Bytes::from_str("1").unwrap()),
         //         chain_id(),
         //         pair.address(),
         //     ).abi_encode()
@@ -235,13 +243,14 @@ impl UniswapV2Pair {
     //     let nonce = self.nonces[owner].read() + U256::from(1);
     //     self.nonces[owner].write(nonce);
     //
-    //     let _digest = alloy_core::primitives::keccak256((
+    //     TODO: implement a user-frendly version of keccack256 -> it should use `Bytes` rather than a raw pointer
+    //     let _digest = keccak256((
     //         vec![0x19, 0x01],
     //         self.domain_separator.read(),
-    //         alloy_core::primitives::keccak256((PERMIT_TYPEHASH, owner, spender, value, nonce, deadline).abi_encode())
+    //         keccak256((PERMIT_TYPEHASH, owner, spender, value, nonce, deadline).abi_encode())
     //     ).abi_encode_packed());
     //
-    //     // TODO: Implement ECDSA verification (ecrecover)
+    //     TODO: Implement ECDSA verification (ecrecover)
     //     let signer = Address::ZERO;
     //
     //     if signer == Address::ZERO || signer != owner {
@@ -264,8 +273,6 @@ impl UniswapV2Pair {
     pub fn allowance(&self, owner: Address, spender: Address) -> U256 {
         self.allowance[owner][spender].read()
     }
-
-    // TODO: use Lock in the state modifying pair fns
 
     // -- AMM PAIR - STATE MODIFYING FUNCTIONS -----------------------------------------------
     fn _update(&mut self, balance0: U256, balance1: U256, reserve0: U256, reserve1: U256) {
@@ -373,8 +380,8 @@ impl UniswapV2Pair {
         let (reserve0, reserve1, _) = self.get_reserves();
         let is_fee_active = self._mint_fee(reserve0, reserve1)?;
 
-        let token0 = IERC20::new(self.token0.read()).with_ctx(&mut *self);
-        let token1 = IERC20::new(self.token1.read()).with_ctx(&mut *self);
+        let mut token0 = IERC20::new(self.token0.read()).with_ctx(&mut *self);
+        let mut token1 = IERC20::new(self.token1.read()).with_ctx(&mut *self);
 
         // Get total supply, current balances, and compute the amounts
         let balance0 = token0.balance_of(self.address()).unwrap_or(U256::ZERO);
@@ -393,8 +400,12 @@ impl UniswapV2Pair {
         // Burn the LP tokens and transfer the amounts back
         self._burn(self.address(), liquidity);
 
-        self._transfer(token0.address(), to, amount0);
-        self._transfer(token1.address(), to, amount1);
+        token0
+            .transfer(to, amount0)
+            .map_err(|_| UniswapV2PairError::TransferFailed)?;
+        token1
+            .transfer(to, amount1)
+            .map_err(|_| UniswapV2PairError::TransferFailed)?;
 
         // Update the AMM reserves
         let balance0 = token0.balance_of(self.address()).unwrap_or(U256::ZERO);
@@ -429,8 +440,8 @@ impl UniswapV2Pair {
             return Err(UniswapV2PairError::InsufficientLiquidity);
         }
 
-        let token0 = IERC20::new(self.token0.read()).with_ctx(&mut *self);
-        let token1 = IERC20::new(self.token1.read()).with_ctx(&mut *self);
+        let mut token0 = IERC20::new(self.token0.read()).with_ctx(&mut *self);
+        let mut token1 = IERC20::new(self.token1.read()).with_ctx(&mut *self);
 
         if to == token0.address() || to == token1.address() {
             return Err(UniswapV2PairError::InvalidTo);
@@ -438,11 +449,15 @@ impl UniswapV2Pair {
 
         // Optimistically transfer tokens
         if amount0_out > U256::ZERO {
-            self._transfer(token0.address(), to, amount0_out);
+            token0
+                .transfer(to, amount0_out)
+                .map_err(|_| UniswapV2PairError::TransferFailed)?;
         }
 
         if amount1_out > U256::ZERO {
-            self._transfer(token1.address(), to, amount1_out);
+            token1
+                .transfer(to, amount1_out)
+                .map_err(|_| UniswapV2PairError::TransferFailed)?;
         }
 
         // Swap callback
@@ -485,7 +500,14 @@ impl UniswapV2Pair {
         // Update reserves
         self._update(balance0, balance1, reserve0, reserve1);
 
-        log::emit(Swap::new(msg_sender(), amount0_in, amount1_in, amount0_out, amount1_out, to));
+        log::emit(Swap::new(
+            msg_sender(),
+            amount0_in,
+            amount1_in,
+            amount0_out,
+            amount1_out,
+            to,
+        ));
 
         Ok(())
     }
@@ -514,7 +536,12 @@ impl UniswapV2Pair {
         let balance0 = token0.balance_of(self.address()).unwrap_or(U256::ZERO);
         let balance1 = token1.balance_of(self.address()).unwrap_or(U256::ZERO);
 
-        self._update(balance0, balance1, self.reserve0.read(), self.reserve1.read());
+        self._update(
+            balance0,
+            balance1,
+            self.reserve0.read(),
+            self.reserve1.read(),
+        );
 
         Ok(())
     }
@@ -538,5 +565,13 @@ impl UniswapV2Pair {
             self.reserve1.read(),
             self.last_block_at.read(),
         )
+    }
+
+    pub fn price0_cumulative_last(&self) -> U256 {
+        self.price0_cumulative_last.read()
+    }
+
+    pub fn price1_cumulative_last(&self) -> U256 {
+        self.price1_cumulative_last.read()
     }
 }

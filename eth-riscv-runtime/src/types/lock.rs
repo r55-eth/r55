@@ -6,8 +6,11 @@ use super::*;
 /// `Lock<E>` wraps a `Slot<bool>` to track lock state and uses a generic error type `E` 
 /// to provide type-safe error handling when attempting to acquire an already locked resource.  
 ///
+/// The `Lock` should be initialized in the contract constructor, by calling its `fn initialize()`.
+///
 /// The `LockGuard` returned by `fn acquire()` automatically releases the lock when it goes out of scope,
 /// ensuring the lock is dropped even if the code returns early or panics.
+#[derive(Default)]
 pub struct Lock<E> {
     unlocked: Slot<bool>,
     _pd: PhantomData<E>,
@@ -22,21 +25,10 @@ impl<E> StorageLayout for Lock<E> {
     }
 }
 
-impl<E> Default for Lock<E> {
-    fn default() -> Self {
-        let mut lock = Self {
-            unlocked: Slot::default(),
-            _pd: PhantomData,
-        };
-        lock.unlocked.write(true);
-        lock
-    }
-}
-
 impl<E> Lock<E> {
-    /// Initialize a new lock in the unlocked state
-    pub fn new() -> Self {
-        Self::default()
+    /// Initialize a new lock in the unlocked state. Should only be created in the constructor.
+    pub fn initialize(&mut self) {
+        self.unlocked.write(true);
     }
     
     /// Attempts to acquire the lock, returning a guard that releases the lock when dropped.
