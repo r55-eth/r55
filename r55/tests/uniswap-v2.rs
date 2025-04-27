@@ -233,7 +233,7 @@ mod uniswap_v2_factory_tests {
 
         let new_fee_to = BOB;
 
-        // Set feeTo
+        // Set `fee_to`
         let selector_set_fee_to = get_selector_from_sig("set_fee_to(address)");
         let calldata_set_fee_to = get_calldata(selector_set_fee_to, new_fee_to.abi_encode());
 
@@ -242,7 +242,7 @@ mod uniswap_v2_factory_tests {
 
         assert!(set_fee_to_result.status, "Set `fee_to` transaction failed");
 
-        // Verify feeTo was updated
+        // Verify `fee_to` was updated
         let selector_fee_to = get_selector_from_sig("fee_to()");
         let fee_to_result = run_tx(&mut db, &factory, selector_fee_to.to_vec(), &fee_to_setter)
             .expect("Error executing tx")
@@ -251,7 +251,7 @@ mod uniswap_v2_factory_tests {
         assert_eq!(
             Address::from_word(B256::from_slice(fee_to_result.as_slice())),
             new_fee_to,
-            "feeTo was not updated correctly"
+            "`fee_to` was not updated correctly"
         );
     }
 
@@ -266,7 +266,7 @@ mod uniswap_v2_factory_tests {
         let unauthorized = BOB;
         let new_fee_to = CAROL;
 
-        // Try to set feeTo with unauthorized account
+        // Try to set `fee_to` with unauthorized account
         let selector_set_fee_to = get_selector_from_sig("set_fee_to(address)");
         let calldata_set_fee_to = get_calldata(selector_set_fee_to, new_fee_to.abi_encode());
 
@@ -289,7 +289,7 @@ mod uniswap_v2_factory_tests {
 
         let new_fee_to_setter = BOB;
 
-        // Set feeToSetter
+        // Set `fee_to_setter`
         let selector_set_fee_to_setter = get_selector_from_sig("set_fee_to_setter(address)");
         let calldata_set_fee_to_setter =
             get_calldata(selector_set_fee_to_setter, new_fee_to_setter.abi_encode());
@@ -304,10 +304,10 @@ mod uniswap_v2_factory_tests {
 
         assert!(
             set_fee_to_setter_result.status,
-            "Set feeToSetter transaction failed"
+            "Set `fee_to_setter` transaction failed"
         );
 
-        // Verify feeToSetter was updated
+        // Verify `fee_to_setter` was updated
         let selector_fee_to_setter = get_selector_from_sig("fee_to_setter()");
         let fee_to_setter_result =
             run_tx(&mut db, &factory, selector_fee_to_setter.to_vec(), &ALICE)
@@ -317,7 +317,7 @@ mod uniswap_v2_factory_tests {
         assert_eq!(
             Address::from_slice(&fee_to_setter_result[12..32]),
             new_fee_to_setter,
-            "feeToSetter was not updated correctly"
+            "`fee_to_setter` was not updated correctly"
         );
     }
 
@@ -332,7 +332,7 @@ mod uniswap_v2_factory_tests {
         let unauthorized = BOB;
         let new_fee_to_setter = CAROL;
 
-        // Try to set feeToSetter with unauthorized account
+        // Try to set `fee_to_setter` with unauthorized account
         let selector_set_fee_to_setter = get_selector_from_sig("set_fee_to_setter(address)");
         let calldata_set_fee_to_setter =
             get_calldata(selector_set_fee_to_setter, new_fee_to_setter.abi_encode());
@@ -357,14 +357,14 @@ mod uniswap_v2_factory_tests {
         let new_fee_to = BOB;
         let new_fee_to_setter = CAROL;
 
-        // First set feeTo to a new address
+        // First set `fee_to` to a new address
         let selector_set_fee_to = get_selector_from_sig("set_fee_to(address)");
         let calldata_set_fee_to = get_calldata(selector_set_fee_to, new_fee_to.abi_encode());
 
         run_tx(&mut db, &factory, calldata_set_fee_to, &fee_to_setter)
             .expect("Error executing set_fee_to tx");
 
-        // Then set feeToSetter to a new address
+        // Then set `fee_to_setter` to a new address
         let selector_set_fee_to_setter = get_selector_from_sig("set_fee_to_setter(address)");
         let calldata_set_fee_to_setter =
             get_calldata(selector_set_fee_to_setter, new_fee_to_setter.abi_encode());
@@ -377,7 +377,7 @@ mod uniswap_v2_factory_tests {
         )
         .expect("Error executing set_fee_to_setter tx");
 
-        // Try to set feeToSetter again with the original feeToSetter (should fail)
+        // Try to set `fee_to_setter` again with the original `fee_to_setter` (should fail)
         let calldata_set_fee_to_setter_again =
             get_calldata(selector_set_fee_to_setter, BOB.abi_encode());
 
@@ -1017,7 +1017,7 @@ mod uniswap_v2_pair_tests {
             fee_to_setter,
         } = pair_setup();
 
-        // Set feeTo to BOB
+        // Set `fee_to` to BOB
         let selector_set_fee_to = get_selector_from_sig("set_fee_to(address)");
         let calldata_set_fee_to = get_calldata(selector_set_fee_to, BOB.abi_encode());
 
