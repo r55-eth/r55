@@ -98,12 +98,8 @@ impl ERC721 {
 
         // Update state
         self.owner_of[id].write(to);
-        
-        let balance_to = self.balance_of[to].read();
-        self.balance_of[to].write(balance_to + U256::from(1));
-
-        let total_supply = self.total_supply.read();
-        self.total_supply.write(total_supply + U256::from(1));
+        self.balance_of[to] += U256::from(1);
+        self.total_supply += U256::from(1);
         
         // Emit event + return
         log::emit(Transfer::new(Address::ZERO, to, id));
@@ -154,11 +150,8 @@ impl ERC721 {
         self.owner_of[id].write(to);
         self.approval_of[id].write(Address::ZERO);
 
-        let balance_from = self.balance_of[from].read();
-        self.balance_of[from].write(balance_from - U256::from(1));
-
-        let balance_to = self.balance_of[to].read();
-        self.balance_of[to].write(balance_to + U256::from(1));
+        self.balance_of[from] -= U256::from(1);
+        self.balance_of[to] += U256::from(1);
 
         // Emit event + return
         log::emit(Transfer::new(from, to, id));

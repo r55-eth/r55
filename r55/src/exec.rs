@@ -419,8 +419,25 @@ fn execute_riscv(
                             },
                         });
                     }
+                    Syscall::Address => {
+                        let this_address = interpreter.contract.target_address;
+                        debug!("ADDRESS (THIS): {:?}", this_address);
+
+                        // Break address into 3 u64s and write to registers
+                        let caller_bytes = this_address.as_slice();
+                        let first_u64 = u64::from_be_bytes(caller_bytes[0..8].try_into()?);
+                        emu.cpu.xregs.write(10, first_u64);
+                        let second_u64 = u64::from_be_bytes(caller_bytes[8..16].try_into()?);
+                        emu.cpu.xregs.write(11, second_u64);
+                        let mut padded_bytes = [0u8; 8];
+                        padded_bytes[..4].copy_from_slice(&caller_bytes[16..20]);
+                        let third_u64 = u64::from_be_bytes(padded_bytes);
+                        emu.cpu.xregs.write(12, third_u64);
+                    }
                     Syscall::Caller => {
                         let caller = interpreter.contract.caller;
+                        debug!("CALLER: {:?}", caller);
+
                         // Break address into 3 u64s and write to registers
                         let caller_bytes = caller.as_slice();
                         let first_u64 = u64::from_be_bytes(caller_bytes[0..8].try_into()?);

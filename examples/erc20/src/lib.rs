@@ -85,8 +85,7 @@ impl ERC20 {
         if to == Address::ZERO { return Err(ERC20Error::ZeroAddress) };
 
         // Increase user balance
-        let to_balance = self.balance_of[to].read();
-        self.balance_of[to].write(to_balance + amount);
+        self.balance_of[to] += amount;
 
         // Increase total supply
         self.total_supply += amount;
@@ -121,14 +120,13 @@ impl ERC20 {
 
         // Read user balances
         let from_balance = self.balance_of[from].read();
-        let to_balance = self.balance_of[to].read();
 
         // Ensure enough balance
         if from_balance < amount { return Err(ERC20Error::InsufficientBalance(from_balance)) }
 
         // Update state
         self.balance_of[from].write(from_balance - amount);
-        self.balance_of[to].write(to_balance + amount);
+        self.balance_of[to] += amount;
 
         // Emit event + return 
         log::emit(Transfer::new(from, to, amount));
@@ -155,8 +153,7 @@ impl ERC20 {
         self.allowance_of[from][msg_sender].write(allowance - amount);
         self.balance_of[from].write(from_balance - amount);
         
-        let to_balance = self.balance_of[to].read();
-        self.balance_of[to].write(to_balance + amount);
+        self.balance_of[to] += amount;
 
         // Emit event + return 
         log::emit(Transfer::new(from, to, amount));

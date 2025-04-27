@@ -260,8 +260,8 @@ pub fn event_derive(input: TokenStream) -> TokenStream {
 
 #[proc_macro_attribute]
 pub fn show_streams(attr: TokenStream, item: TokenStream) -> TokenStream {
-    println!("attr: \"{}\"", attr.to_string());
-    println!("item: \"{}\"", item.to_string());
+    println!("attr: \"{}\"", attr);
+    println!("item: \"{}\"", item);
     item
 }
 
@@ -276,6 +276,7 @@ pub fn contract(_attr: TokenStream, item: TokenStream) -> TokenStream {
 
     let mut constructor = None;
     let mut public_methods: Vec<&ImplItemMethod> = Vec::new();
+    let mut private_methods: Vec<&ImplItemMethod> = Vec::new();
 
     // Iterate over the items in the impl block to find pub methods + constructor
     for item in input.items.iter() {
@@ -284,10 +285,16 @@ pub fn contract(_attr: TokenStream, item: TokenStream) -> TokenStream {
                 constructor = Some(method);
             } else if let syn::Visibility::Public(_) = method.vis {
                 public_methods.push(method);
+            } else {
+                private_methods.push(method);
             }
         }
     }
 
+    let inner_methods: Vec<_> = private_methods
+        .iter()
+        .map(|method| quote! { #method })
+        .collect();
     let input_methods: Vec<_> = public_methods
         .iter()
         .map(|method| quote! { #method })
@@ -464,6 +471,7 @@ pub fn contract(_attr: TokenStream, item: TokenStream) -> TokenStream {
             #emit_helper
 
             impl #struct_name { #(#input_methods)* }
+            impl #struct_name { #(#inner_methods)* }
             impl Contract for #struct_name {
                 fn call(&mut self) {
                     self.call_with_data(&msg_data());
@@ -588,11 +596,12 @@ pub fn storage(_attr: TokenStream, input: TokenStream) -> TokenStream {
     let expanded = quote! {
         #vis struct #name { #(#struct_fields,)* }
 
-        impl #name {
-            pub fn default() -> Self {
+        impl Default for #name {
+            fn default() -> Self {
                 Self { #(#init_fields,)* }
             }
         }
+        impl #name { pub fn address(&self) -> Address { eth_riscv_runtime::this() } }
     };
 
     TokenStream::from(expanded)

@@ -1,7 +1,7 @@
 use core::{
     alloc::{GlobalAlloc, Layout},
     marker::PhantomData,
-    ops::{Deref, DerefMut, Index, IndexMut}, 
+    ops::{Add, AddAssign, Deref, DerefMut, Index, IndexMut, Sub, SubAssign}, 
 };
 
 use crate::alloc::GLOBAL;
@@ -237,3 +237,64 @@ where
         }
     }
 }
+
+// Implementation of several `core::ops` traits to improve dev-ex
+impl<V> Add<<V as StorageStorable>::Value> for MappingGuard<V>
+where
+    V: StorageStorable,
+    V::Value: SolValue + core::convert::From<<<V::Value as SolValue>::SolType as SolType>::RustType>,
+    V::Value: Add<Output = V::Value>,
+{
+    type Output = V::Value;
+    fn add(self, rhs: V::Value) -> V::Value {
+        self.read() + rhs
+    }
+}
+
+impl<V> AddAssign<<V as StorageStorable>::Value> for MappingGuard<V>
+where
+    V: StorageStorable,
+    V::Value: SolValue + core::convert::From<<<V::Value as SolValue>::SolType as SolType>::RustType>,
+    V::Value: Add<Output = V::Value> + Copy,
+{
+    fn add_assign(&mut self, rhs: V::Value) {
+        let current = self.read();
+        self.write(current + rhs);
+    }
+}
+
+impl<V> Sub<<V as StorageStorable>::Value> for MappingGuard<V>
+where
+    V: StorageStorable,
+    V::Value: SolValue + core::convert::From<<<V::Value as SolValue>::SolType as SolType>::RustType>,
+    V::Value: Sub<Output = V::Value>,
+{
+    type Output = V::Value;
+    fn sub(self, rhs: V::Value) -> V::Value {
+        self.read() - rhs
+    }
+}
+
+impl<V> SubAssign<<V as StorageStorable>::Value> for MappingGuard<V>
+where
+    V: StorageStorable,
+    V::Value: SolValue + core::convert::From<<<V::Value as SolValue>::SolType as SolType>::RustType>,
+    V::Value: Sub<Output = V::Value> + Copy,
+{
+    fn sub_assign(&mut self, rhs: V::Value) {
+        let current = self.read();
+        self.write(current - rhs);
+    }
+}
+
+impl<V> PartialEq for MappingGuard<V>
+where
+    V: StorageStorable,
+    V::Value: SolValue + core::convert::From<<<V::Value as SolValue>::SolType as SolType>::RustType>,
+    V::Value: PartialEq,
+{
+    fn eq(&self, other: &Self) -> bool {
+        self.read() == other.read()
+    }
+}
+

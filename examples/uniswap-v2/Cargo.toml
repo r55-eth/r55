@@ -1,5 +1,5 @@
 [package]
-name = "erc20x"
+name = "uniswap-v2"
 version = "0.1.0"
 edition = "2021"
 
@@ -14,13 +14,13 @@ interface-only = []
 contract-derive = { path = "../../contract-derive" }
 eth-riscv-runtime = { path = "../../eth-riscv-runtime" }
 
-erc20 = { path = "../erc20", features = ["interface-only"] }
-
 alloy-core = { version = "0.8.20", default-features = false }
 alloy-sol-types = { version = "0.8.20", default-features = false }
 
+erc20 = { path = "../erc20", features = ["interface-only"] }
+
 [package.metadata.deployable_deps]
-erc20 = { path = "../erc20" }
+pair = { path = "." }
 
 [[bin]]
 name = "runtime"

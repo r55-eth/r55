@@ -14,6 +14,9 @@ pub use mapping::Mapping;
 mod slot;
 pub use slot::Slot;
 
+mod lock;
+pub use lock::Lock;
+
 ///  STORAGE TYPES:
 ///  > Must implement the following traits:
 ///     - `StorageLayout`: Allows the `storage` macro to allocate a storage slot.
