@@ -26,7 +26,8 @@ fn main() -> eyre::Result<()> {
     let temp_dir = project_root.join("target").join("r55-generated");
     fs::create_dir_all(&temp_dir)?;
 
-    // Find all R55 projects under the examples directory
+    // TODO: discuss with Leo and Georgios how would importing r55 as a dependency for SC development should look like
+    // Find all R55 projects under the `examples` directory
     let target_dir = project_root.join("examples");
     let projects = find_r55_projects(&target_dir)?;
 
