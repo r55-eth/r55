@@ -9,7 +9,6 @@ use r55::{
     },
 };
 use revm::InMemoryDB;
-use tracing::{error, warn};
 
 const WETH: Address = address!("0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2");
 const USDC: Address = address!("0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48");
@@ -541,7 +540,6 @@ mod uniswap_v2_pair_tests {
         erc20_mint(&mut db, token1, ALICE, token1_amount);
 
         // Transfer tokens to pair
-        warn!("TRANSFER");
         erc20_transfer(&mut db, token0, pair, token0_amount);
         erc20_transfer(&mut db, token1, pair, token1_amount);
 
