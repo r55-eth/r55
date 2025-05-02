@@ -2,10 +2,11 @@ use alloy_core::hex::FromHex;
 use alloy_primitives::address;
 use revm::Database;
 pub use revm::{
-    primitives::{keccak256, ruint::Uint, AccountInfo, Address, Bytecode, Bytes, U256},
+    primitives::{keccak256, ruint::Uint, AccountInfo, Address, Bytecode, Bytes, Log, U256},
     InMemoryDB,
 };
 use std::{fs, path::Path, sync::Once};
+use tracing::info;
 
 static INIT: Once = Once::new();
 
@@ -70,4 +71,21 @@ pub fn load_bytecode_from_file<P: AsRef<Path>>(path: P) -> Bytes {
     let content = fs::read_to_string(path).expect("Unable to load bytecode from path");
     let trimmed = content.trim().trim_start_matches("0x");
     Bytes::from_hex(trimmed).expect("Unable to parse file content as bytes")
+}
+
+pub fn print_event_logs(logs: &[Log], title: Option<&str>) {
+    if let Some(title) = title {
+        info!("=== {} ===", title);
+    }
+    
+    if logs.is_empty() {
+        info!("No events emitted");
+        return;
+    }
+    
+    for (i, log) in logs.iter().enumerate() {
+        info!("Event #{}: ", i + 1);
+        info!("  Contract Address: {}", log.address);
+        info!("  Log details: {:#?}", log);
+    }
 }

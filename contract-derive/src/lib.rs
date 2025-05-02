@@ -216,6 +216,11 @@ pub fn event_derive(input: TokenStream) -> TokenStream {
                     #(#field_names),*
                 }
             }
+
+            pub fn emit(#(#field_names: #field_types),*) {
+                let event = Self::new(#(#field_names),*);
+                eth_riscv_runtime::log::emit(event);
+            }
         }
 
         impl eth_riscv_runtime::log::Event for #name {
