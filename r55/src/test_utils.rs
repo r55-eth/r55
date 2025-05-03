@@ -6,7 +6,6 @@ pub use revm::{
     InMemoryDB,
 };
 use std::{fs, path::Path, sync::Once};
-use tracing::info;
 
 static INIT: Once = Once::new();
 
