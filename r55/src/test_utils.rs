@@ -2,7 +2,7 @@ use alloy_core::hex::FromHex;
 use alloy_primitives::address;
 use revm::Database;
 pub use revm::{
-    primitives::{keccak256, ruint::Uint, AccountInfo, Address, Bytecode, Bytes, U256},
+    primitives::{keccak256, ruint::Uint, AccountInfo, Address, Bytecode, Bytes, Log, U256},
     InMemoryDB,
 };
 use std::{fs, path::Path, sync::Once};

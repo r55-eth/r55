@@ -92,7 +92,7 @@ impl ERC20 {
         self.total_supply += amount;
         
         // Emit event + return `true` to stick to (EVM) ERC20 convention
-        log::emit(Transfer::new(Address::ZERO, to, amount));
+        Transfer::emit(Address::ZERO, to, amount);
         Ok(true)
     }
 
@@ -106,8 +106,8 @@ impl ERC20 {
         // Update state
         self.allowance_of[owner][spender].write(amount);
 
-        // Emit event + return 
-        log::emit(Approval::new(owner, spender, amount));
+        // Emit event + return
+        Approval::emit(owner, spender, amount);
         Ok(true)
     }
 
@@ -130,8 +130,8 @@ impl ERC20 {
         self.balance_of[from].write(from_balance - amount);
         self.balance_of[to].write(to_balance + amount);
 
-        // Emit event + return 
-        log::emit(Transfer::new(from, to, amount));
+        // Emit event + return
+        Transfer::emit(from, to, amount);
         Ok(true)
     }
 
@@ -158,8 +158,8 @@ impl ERC20 {
         let to_balance = self.balance_of[to].read();
         self.balance_of[to].write(to_balance + amount);
 
-        // Emit event + return 
-        log::emit(Transfer::new(from, to, amount));
+        // Emit event + return
+        Transfer::emit(from, to, amount);
         Ok(true)
     }
 
@@ -173,8 +173,8 @@ impl ERC20 {
         // Update state
         self.owner.write(new_owner);
 
-        // Emit event + return 
-        log::emit(OwnershipTransferred::new(from, new_owner));
+        // Emit event + return
+        OwnershipTransferred::emit(from, new_owner);
         Ok(true)
     }
 
