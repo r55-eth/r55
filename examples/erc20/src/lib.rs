@@ -106,7 +106,7 @@ impl ERC20 {
         // Update state
         self.allowance_of[owner][spender].write(amount);
 
-        // Emit event + return usando la nueva sintaxis
+        // Emit event + return
         Approval::emit(owner, spender, amount);
         Ok(true)
     }
@@ -130,7 +130,7 @@ impl ERC20 {
         self.balance_of[from].write(from_balance - amount);
         self.balance_of[to].write(to_balance + amount);
 
-        // Emit event + return usando la nueva sintaxis
+        // Emit event + return
         Transfer::emit(from, to, amount);
         Ok(true)
     }
@@ -158,7 +158,7 @@ impl ERC20 {
         let to_balance = self.balance_of[to].read();
         self.balance_of[to].write(to_balance + amount);
 
-        // Emit event + return usando la nueva sintaxis
+        // Emit event + return
         Transfer::emit(from, to, amount);
         Ok(true)
     }
@@ -173,7 +173,7 @@ impl ERC20 {
         // Update state
         self.owner.write(new_owner);
 
-        // Emit event + return usando la nueva sintaxis
+        // Emit event + return
         OwnershipTransferred::emit(from, new_owner);
         Ok(true)
     }
