@@ -1,6 +1,6 @@
 use alloc::borrow::Cow;
 
-/// Error related to syscall convertions
+/// Error related to syscall conversions
 #[derive(Debug, thiserror_no_std::Error)]
 pub enum Error {
     #[error("Unknown syscall opcode: {0}")]
