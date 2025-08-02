@@ -63,7 +63,7 @@ pub fn get_mapping_slot(key_bytes: Vec<u8>, id: U256) -> U256 {
 
 pub fn read_db_slot(db: &mut InMemoryDB, contract: Address, slot: U256) -> U256 {
     db.storage(contract, slot)
-        .expect("Unable to read storge slot")
+        .expect("Unable to read storage slot")
 }
 
 pub fn load_bytecode_from_file<P: AsRef<Path>>(path: P) -> Bytes {
