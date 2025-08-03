@@ -197,7 +197,7 @@ pub fn handle_register<EXT, DB: Database>(handler: &mut EvmHandler<'_, EXT, DB>)
 
     // execute riscv context or old logic.
     let old_handle = handler.execution.execute_frame.clone();
-    handler.execution.execute_frame = Arc::new(move |frame, memory, instraction_table, ctx| {
+    handler.execution.execute_frame = Arc::new(move |frame, memory, instruction_table, ctx| {
         let depth = call_stack.borrow().len() - 1;
 
         // use last frame as stack is LIFO
@@ -210,7 +210,7 @@ pub fn handle_register<EXT, DB: Database>(handler: &mut EvmHandler<'_, EXT, DB>)
             execute_riscv(riscv_context, frame.interpreter_mut(), memory, ctx)?
         } else {
             debug!("=== [OLD Handler] ==================--");
-            old_handle(frame, memory, instraction_table, ctx)?
+            old_handle(frame, memory, instruction_table, ctx)?
         };
 
         // if action is return, pop the stack and potentially cache created address.
@@ -705,9 +705,9 @@ fn r55_gas_used(inst_count: &BTreeMap<String, u64>) -> u64 {
                 // Multiplications
                 s if s.starts_with("mul") => count * 5,
                 // Loads
-                "lb" | "lh" | "lw" | "ld" | "lbu" | "lhu" | "lwu" => count * 3, // Cost analagous to `MLOAD`
+                "lb" | "lh" | "lw" | "ld" | "lbu" | "lhu" | "lwu" => count * 3, // Cost analogous to `MLOAD`
                 // Stores
-                "sb" | "sh" | "sw" | "sd" | "sc.w" | "sc.d" => count * 3, // Cost analagous to `MSTORE`
+                "sb" | "sh" | "sw" | "sd" | "sc.w" | "sc.d" => count * 3, // Cost analogous to `MSTORE`
                 // Branching
                 "beq" | "bne" | "blt" | "bge" | "bltu" | "bgeu" | "jal" | "jalr" => count * 3,
                 _ => *count, // All other instructions including `add` and `sub`
