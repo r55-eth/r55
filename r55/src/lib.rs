@@ -150,7 +150,7 @@ mod tests {
         assert_eq!(
             U256::from_be_bytes::<32>(carol_allowance_result.as_slice().try_into().unwrap()),
             value_approve,
-            "Incorrect balance"
+            "Incorrect allowance"
         );
     }
 
