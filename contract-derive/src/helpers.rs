@@ -1,5 +1,3 @@
-use std::error::Error;
-
 use alloy_core::primitives::keccak256;
 use alloy_dyn_abi::DynSolType;
 use proc_macro2::TokenStream;
@@ -130,26 +128,58 @@ where
     let (mut_methods, immut_methods): (Vec<MethodInfo>, Vec<MethodInfo>) =
         methods.into_iter().partition(|m| m.is_mutable());
 
-    // Generate implementations
-    let mut_method_impls = mut_methods
-        .iter()
-        .map(|method| generate_method_impl(method, interface_style, true));
-    let immut_method_impls = immut_methods
-        .iter()
-        .map(|method| generate_method_impl(method, interface_style, false));
+   // Generate implementations and documentation for mutable methods
+    let mut mut_method_impls = Vec::new();
+    let mut mut_method_docs = Vec::new();
+    for method in &mut_methods {
+        let (impl_code, doc_code) = generate_method_impl(method, interface_style, true);
+        mut_method_impls.push(impl_code);
+        mut_method_docs.push(doc_code);
+    }
+
+    // Generate implementations and documentation for immutable methods
+    let mut immut_method_impls = Vec::new();
+    let mut immut_method_docs = Vec::new();
+    for method in &immut_methods {
+        let (impl_code, doc_code) = generate_method_impl(method, interface_style, false);
+        immut_method_impls.push(impl_code);
+        immut_method_docs.push(doc_code);
+    }
 
     quote! {
-        use core::marker::PhantomData;
+        /// `Interface` is a wrapper type for `Address`, which allows to easily interact with the contract's bytecode. Automatically derives the `CallCtx`, but needs to be initialized using a builder pattern.
+        ///   ```
+        ///   // Can perform a staticcall to an ERC20
+        ///    pub fn call_static(&self, token_addr: Address) {
+        ///        let token = IERC20::new(token_addr).with_ctx(self);      // IERC20<ReadOnly>
+        ///    }
+        /// 
+        ///    // Can perform a (mutable) call to an ERC20
+        ///    pub fn call_mutable(&mut self, token_addr: Address) {
+        ///         let mut token = IERC20::new(token_addr).with_ctx(self);  // IERC20<ReadWrite>
+        ///    }
+        ///    ```
+        ///
+        /// -------------------------------------------------------------------------------------------
+        ///
+        /// Implementation methods, always available:
+        /// * fn `address`() -> `Address`; Returns the address of the underlying contract
+        ///
+        /// Immutable methods, available on `StaticCtx` and `MutableCtx`:
+        #(#immut_method_docs)*
+        ///
+        /// Mutable methods, only available on `MutableCtx`:
+        #(#mut_method_docs)*
         pub struct #interface_name<C: CallCtx> {
             address: Address,
-            _ctx: PhantomData<C>
+            _ctx: core::marker::PhantomData<C>
         }
 
         impl InitInterface for #interface_name<ReadOnly> {
             fn new(address: Address) -> InterfaceBuilder<Self> {
                 InterfaceBuilder {
                     address,
-                    _phantom: PhantomData
+                    _phantom: core::marker::PhantomData
                 }
             }
         }
@@ -159,7 +189,7 @@ where
             fn into_interface(self) -> #interface_name<C> {
                 #interface_name {
                     address: self.address,
-                    _ctx: PhantomData
+                    _ctx: core::marker::PhantomData
                 }
             }
         }
@@ -170,7 +200,7 @@ where
             fn from_builder(builder: InterfaceBuilder<Self>) -> Self {
                 Self {
                     address: builder.address,
-                    _ctx: PhantomData
+                    _ctx: core::marker::PhantomData
                 }
             }
         }
@@ -195,7 +225,7 @@ fn generate_method_impl(
     method: &MethodInfo,
     interface_style: Option<InterfaceNamingStyle>,
     is_mutable: bool,
-) -> TokenStream {
+) -> (TokenStream, TokenStream) {
     let name = method.name;
     let return_type = method.return_type;
     let method_selector = u32::from_be_bytes(
@@ -239,9 +269,38 @@ fn generate_method_impl(
             quote! { &self},
         )
     };
+    let wrapper_type = extract_wrapper_types(return_type);
+
+    // Generate documentation
+    let (arg_names_for_docs, arg_types_for_docs) = get_arg_props_skip_first(method);
+    let args_docs = if arg_names_for_docs.is_empty() {
+        String::new()
+    } else {
+        let args_with_types = arg_names_for_docs.iter().zip(arg_types_for_docs.iter())
+            .map(|(name, ty)| format!("{}: `{}`", name, quote!(#ty).to_string().replace(" ", "").replace(",", ", ")))
+            .collect::<Vec<_>>()
+            .join(", ");
+        args_with_types
+    };
+    let doc_return_type = match &wrapper_type {
+        WrapperType::Result(ok_type, err_type) => quote!(Result<#ok_type, #err_type>),
+        WrapperType::Option(inner_type) => quote!(Option<#inner_type>),
+        WrapperType::None => match return_type {
+            ReturnType::Default => quote!{Option<()>},
+            ReturnType::Type(_, ty) => quote!(Option<#ty>),
+        },
+    };
+    
+    let doc_line = format!(
+        r#"* fn `{}`({}) -> `{}`;"#,
+        method.name,
+        args_docs,
+        doc_return_type.to_string().replace(" ", "").replace(",", ", "),
+    );
+    let doc_stream = syn::parse_quote!(#[doc = #doc_line]);
 
     // Generate different implementations based on return type
-    match extract_wrapper_types(&method.return_type) {
+    let impl_stream = match wrapper_type {
         // If `Result<T, E>` handle each individual type
         WrapperType::Result(ok_type, err_type) => quote! {
             pub fn #name(#self_param, #(#arg_names: #arg_types),*) -> Result<#ok_type, #err_type>  {
@@ -313,7 +372,9 @@ fn generate_method_impl(
                 }
             }
         }
-    }
+    };
+
+    (impl_stream, doc_stream)
 }
 
 pub enum WrapperType {
@@ -435,16 +496,17 @@ pub fn rust_type_to_sol_type(ty: &Type) -> Result<DynSolType, &'static str> {
                         .trim_start_matches('B')
                         .parse()
                         .map_err(|_| "Invalid fixed bytes size")?;
-                    if size > 0 && size <= 32 {
-                        Ok(DynSolType::FixedBytes(size))
+                    if size > 0 && size <= 256 {
+                        Ok(DynSolType::FixedBytes(size / 8))
                     } else {
                         Err("Invalid fixed bytes size (between 1-32)")
                     }
                 }
                 // Fixed-size unsigned integers
-                u if u.starts_with('U') => {
+                u if u.to_lowercase().starts_with('u') => {
                     let size: usize = u
-                        .trim_start_matches('U')
+                        .to_lowercase()
+                        .trim_start_matches('u')
                         .parse()
                         .map_err(|_| "Invalid uint size")?;
                     if size > 0 && size <= 256 && size % 8 == 0 {
@@ -454,9 +516,10 @@ pub fn rust_type_to_sol_type(ty: &Type) -> Result<DynSolType, &'static str> {
                     }
                 }
                 // Fixed-size signed integers
-                i if i.starts_with('I') => {
+                i if i.to_lowercase().starts_with('i') => {
                     let size: usize = i
-                        .trim_start_matches('I')
+                        .to_lowercase()
+                        .trim_start_matches('i')
                         .parse()
                         .map_err(|_| "Invalid int size")?;
                     if size > 0 && size <= 256 && size % 8 == 0 {
@@ -548,15 +611,23 @@ pub fn generate_deployment_code(
         Some(method) => {
             let method_info = MethodInfo::from(method);
             let (arg_names, arg_types) = get_arg_props_all(&method_info);
-            quote! {
-                impl #struct_name { #method }
 
-                // Get encoded constructor args
-                let calldata = eth_riscv_runtime::msg_data();
+            if arg_types.is_empty() {
+                quote! {
+                    impl #struct_name { #method }
+                    #struct_name::new();
+                }
+            } else {
+                quote! {
+                    impl #struct_name { #method }
 
-                let (#(#arg_names),*) = <(#(#arg_types),*)>::abi_decode(&calldata, true)
-                    .expect("Failed to decode constructor args");
-                #struct_name::new(#(#arg_names),*);
+                    // Get encoded constructor args
+                    let calldata = eth_riscv_runtime::msg_data();
+
+                    let (#(#arg_names),*) = <(#(#arg_types),*)>::abi_decode(&calldata, true)
+                        .expect("Failed to decode constructor args");
+                    #struct_name::new(#(#arg_names),*);
+                }
             }
         }
         None => quote! {

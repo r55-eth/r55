@@ -9,6 +9,12 @@ pub struct Slot<V> {
     _pd: PhantomData<V>,
 }
 
+impl<V> Slot<V> {
+    pub(crate) fn id(&self) -> U256 {
+        self.id
+    }
+}
+
 impl<V> StorageLayout for Slot<V> {
     fn allocate(first: u64, second: u64, third: u64, fourth: u64) -> Self {
         Self {
@@ -50,7 +56,7 @@ where
     }
 }
 
-// Implementation of several std traits to improve dev-ex
+// Implementation of several `core::ops` traits to improve dev-ex
 impl<V> Add<V> for Slot<V>
 where
     Self: StorageStorable<Value = V>,

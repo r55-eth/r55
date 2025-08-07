@@ -19,6 +19,9 @@ erc20 = { path = "../erc20", features = ["interface-only"] }
 alloy-core = { version = "0.8.20", default-features = false }
 alloy-sol-types = { version = "0.8.20", default-features = false }
 
+[package.metadata.deployable_deps]
+erc20 = { path = "../erc20" }
+
 [[bin]]
 name = "runtime"
 path = "src/lib.rs"

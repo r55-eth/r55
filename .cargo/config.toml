@@ -4,5 +4,5 @@ test-r55 = "test --package r55"
 test-e2e = "test --package r55 --test e2e"
 test-erc20 = "test --package r55 --test erc20"
 test-erc721 = "test --package r55 --test erc721"
-
+test-univ2 = "test --package r55 --test uniswap-v2"
 

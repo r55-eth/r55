@@ -102,6 +102,18 @@ pub fn keccak256(offset: u64, size: u64) -> U256 {
     U256::from_limbs([first, second, third, fourth])
 }
 
+pub fn this() -> Address {
+    let (first, second, third): (u64, u64, u64);
+    unsafe {
+        asm!("ecall", lateout("a0") first, lateout("a1") second, lateout("a2") third, in("t0") u8::from(Syscall::Address));
+    }
+    let mut bytes = [0u8; 20];
+    bytes[0..8].copy_from_slice(&first.to_be_bytes());
+    bytes[8..16].copy_from_slice(&second.to_be_bytes());
+    bytes[16..20].copy_from_slice(&third.to_be_bytes()[..4]);
+    Address::from_slice(&bytes)
+}
+
 pub fn msg_sender() -> Address {
     let (first, second, third): (u64, u64, u64);
     unsafe {

@@ -1,8 +1,0 @@
-[target.riscv64imac-unknown-none-elf]
-rustflags = [
-  "-C", "link-arg=-T../../r5-rust-rt.x",
-  "-C", "llvm-args=--inline-threshold=275"
-]
-
-[build]
-target = "riscv64imac-unknown-none-elf"
