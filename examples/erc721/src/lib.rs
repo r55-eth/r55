@@ -106,7 +106,7 @@ impl ERC721 {
         self.total_supply.write(total_supply + U256::from(1));
         
         // Emit event + return
-        log::emit(Transfer::new(Address::ZERO, to, id));
+        Transfer::emit(Address::ZERO, to, id);
         Ok(true)
     }
 
@@ -122,7 +122,7 @@ impl ERC721 {
         self.approval_of[id].write(spender);
 
         // Emit event + return
-        log::emit(Approval::new(owner, spender, id));
+        Approval::emit(owner, spender, id);
         Ok(true)
     }
 
@@ -133,7 +133,7 @@ impl ERC721 {
         self.is_operator[msg_sender][operator].write(approved);
 
         // Emit event + return
-        log::emit(ApprovalForAll::new(msg_sender, operator, approved));
+        ApprovalForAll::emit(msg_sender, operator, approved);
         Ok(true)
     }
 
@@ -161,7 +161,7 @@ impl ERC721 {
         self.balance_of[to].write(balance_to + U256::from(1));
 
         // Emit event + return
-        log::emit(Transfer::new(from, to, id));
+        Transfer::emit(from, to, id);
         Ok(true)
     }
 
@@ -174,7 +174,7 @@ impl ERC721 {
         self.owner.write(new_owner);
 
         // Emit event + return 
-        log::emit(OwnershipTransferred::new(from, new_owner));
+        OwnershipTransferred::emit(from, new_owner);
         Ok(true)
     }
 
